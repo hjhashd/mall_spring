@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.coding24h.mall_spring.mapper.review.ReplyMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="ReplyResultMap" type="com.coding24h.mall_spring.entity.Reply">
+        <id column="reply_id" property="replyId"/>
+        <result column="content" property="content"/>
+        <result column="create_time" property="createTime"/>
+        <result column="user_id" property="userId"/>
+        <result column="review_id" property="reviewId"/>
+        <result column="replied_to_user_id" property="repliedToUserId"/>
+        <result column="replied_to_username" property="repliedToUsername"/>
+        <result column="is_append" property="isAppend"/>
+        <result column="deleted" property="deleted"/>
+        <!-- 关联字段 -->
+        <result column="username" property="username"/>
+        <result column="user_avatar" property="userAvatar"/>
+    </resultMap>
+
+    <!-- 基础查询字段 -->
+    <sql id="ReplyBaseColumns">
+        r.reply_id, r.content, r.create_time, r.user_id, r.review_id,
+        r.replied_to_user_id, r.replied_to_username, r.is_append,
+        r.deleted
+    </sql>
+
+    <!-- 用户信息字段 -->
+    <sql id="UserInfoColumns">
+        u.username, u.avatar as user_avatar
+    </sql>
+
+    <!-- 根据评价ID获取回复列表 -->
+    <select id="selectRepliesByReviewId" resultMap="ReplyResultMap">
+        SELECT
+        <include refid="ReplyBaseColumns"/>,
+        <include refid="UserInfoColumns"/>
+        FROM replies r
+        LEFT JOIN users u ON r.user_id = u.user_id
+        WHERE r.deleted = 0
+        AND r.review_id = #{reviewId}
+        ORDER BY r.create_time ASC
+    </select>
+
+    <!-- 获取评价的回复数量 -->
+    <select id="selectReplyCountByReviewId" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        FROM replies r
+        WHERE r.deleted = 0
+          AND r.review_id = #{reviewId}
+    </select>
+
+    <!-- 检查用户是否已追评 -->
+    <select id="selectAppendReplyByReviewIdAndUserId" resultMap="ReplyResultMap">
+        SELECT
+        <include refid="ReplyBaseColumns"/>
+        FROM replies r
+        WHERE r.deleted = 0
+        AND r.review_id = #{reviewId}
+        AND r.user_id = #{userId}
+        AND r.is_append = 1
+        LIMIT 1
+    </select>
+
+    <!-- 插入回复 -->
+    <insert id="insertReply" parameterType="com.coding24h.mall_spring.entity.Reply" useGeneratedKeys="true" keyProperty="replyId">
+        INSERT INTO replies (
+            content, create_time, user_id, review_id,
+            replied_to_user_id, replied_to_username, is_append, deleted
+        ) VALUES (
+                     #{content}, #{createTime}, #{userId}, #{reviewId},
+                     #{repliedToUserId}, #{repliedToUsername}, #{isAppend}, #{deleted}
+                 )
+    </insert>
+
+    <!-- 根据ID查询回复 -->
+    <select id="selectReplyById" resultMap="ReplyResultMap">
+        SELECT
+        <include refid="ReplyBaseColumns"/>
+        FROM replies r
+        WHERE r.deleted = 0
+        AND r.reply_id = #{replyId}
+    </select>
+
+    <!-- 根据ID删除回复（逻辑删除） -->
+    <update id="deleteReplyById">
+        UPDATE replies
+        SET deleted = 1
+        WHERE reply_id = #{replyId}
+    </update>
+
+</mapper>

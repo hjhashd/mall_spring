@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.coding24h.mall_spring.mapper.OrderItemMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="OrderItemResultMap" type="com.coding24h.mall_spring.entity.OrderItem">
+        <id property="itemId" column="item_id"/>
+        <result property="orderId" column="order_id"/>
+        <result property="productId" column="product_id"/>
+        <result property="productName" column="product_name"/>
+        <result property="productImage" column="product_image"/>
+        <result property="quantity" column="quantity"/>
+        <result property="unitPrice" column="unit_price"/>
+        <result property="totalPrice" column="total_price"/>
+        <result property="condition" column="condition"/>
+        <result property="itemStatus" column="item_status"/>
+        <result property="isReviewed" column="is_reviewed"/>
+        <result property="afterSaleId" column="after_sale_id"/>  <!-- 映射售后ID -->
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <!-- 查询字段 -->
+    <sql id="Base_Column_List">
+        item_id, order_id, product_id, product_name, product_image,
+        quantity, unit_price, total_price, `condition`, item_status, created_at
+    </sql>
+
+    <!-- 根据订单ID查询订单项列表 -->
+    <!-- 根据订单ID查询订单项列表，并关联获取售后ID -->
+    <select id="selectByOrderId" parameterType="string" resultMap="OrderItemResultMap">
+        SELECT
+        oi.item_id,
+        oi.order_id,
+        oi.product_id,
+        oi.product_name,
+        pi.image_url AS product_image,
+        oi.quantity,
+        oi.unit_price,
+        oi.total_price,
+        oi.`condition`,
+        oi.item_status,
+        oi.is_reviewed,
+        oi.created_at,
+        aft.after_sale_id  <!-- 通过LEFT JOIN获取售后ID -->
+        FROM
+        order_items oi
+        LEFT JOIN
+        product_images pi ON oi.product_id = pi.product_id AND pi.is_main = 1
+        LEFT JOIN
+        after_sales aft ON oi.item_id = aft.order_item_id  <!-- 关联售后表 -->
+        WHERE
+        oi.order_id = #{orderId}
+        ORDER BY
+        oi.created_at ASC
+    </select>
+
+    <!-- 批量插入订单项 -->
+    <insert id="insertOrderItem" parameterType="com.coding24h.mall_spring.entity.OrderItem">
+        INSERT INTO order_items (
+            order_id, product_id, product_name, product_image,
+            quantity, unit_price, total_price, `condition`, item_status, created_at
+        ) VALUES (
+                     #{orderId}, #{productId}, #{productName}, #{productImage},
+                     #{quantity}, #{unitPrice}, #{totalPrice}, #{condition}, #{itemStatus}, #{createdAt}
+                 )
+    </insert>
+
+    <!-- 根据订单项ID查询订单项 -->
+    <select id="selectById" parameterType="int" resultMap="OrderItemResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM order_items
+        WHERE item_id = #{itemId}
+    </select>
+
+    <!-- 根据订单ID删除订单项 -->
+    <delete id="deleteByOrderId" parameterType="string">
+        DELETE FROM order_items WHERE order_id = #{orderId}
+    </delete>
+
+    <update id="updateReviewedStatus">
+        UPDATE order_items
+        SET
+            is_reviewed = #{isReviewed, javaType=boolean, jdbcType=TINYINT}
+        WHERE
+            item_id = #{itemId}
+    </update>
+
+    <!-- 根据订单ID列表批量查询订单项 -->
+    <select id="selectByOrderIds" resultMap="OrderItemResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM order_items
+        WHERE order_id IN
+        <foreach collection="orderIds" item="orderId" open="(" separator="," close=")">
+            #{orderId}
+        </foreach>
+        ORDER BY created_at ASC
+    </select>
+
+    <!-- 更新订单项状态 -->
+    <update id="updateItemStatus">
+        UPDATE order_items
+        SET item_status = #{itemStatus}
+        WHERE item_id = #{itemId}
+    </update>
+
+    <!-- 根据商品ID查询相关订单项 -->
+    <select id="selectByProductId" parameterType="int" resultMap="OrderItemResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM order_items
+        WHERE product_id = #{productId}
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- 查询用户的所有订单项（需要关联orders表） -->
+    <select id="selectByUserId" parameterType="int" resultMap="OrderItemResultMap">
+        SELECT oi.*
+        FROM order_items oi
+                 INNER JOIN orders o ON oi.order_id = o.order_id
+        WHERE o.user_id = #{userId}
+        ORDER BY oi.created_at DESC
+    </select>
+
+</mapper>

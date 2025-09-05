@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.coding24h.mall_spring.mapper.CartMapper">
+
+    <!-- 添加或更新购物车项 -->
+    <insert id="addOrUpdateCartItem" parameterType="com.coding24h.mall_spring.entity.Cart">
+        INSERT INTO cart (user_id, product_id, quantity, is_selected, created_at, updated_at)
+        VALUES (#{userId}, #{productId}, #{quantity}, #{isSelected}, NOW(), NOW())
+            ON DUPLICATE KEY UPDATE
+                                 quantity = quantity + VALUES(quantity),
+                                 updated_at = NOW()
+    </insert>
+
+    <!-- 根据用户ID查询购物车（包含商品和卖家信息） -->
+    <select id="selectByUserId" resultType="com.coding24h.mall_spring.entity.Cart">
+        SELECT
+            c.*,
+            p.title as "product.title",
+            p.description as "product.description",
+            p.price as "product.price",
+            p.stock as "product.stock",
+            p.condition as "product.condition",
+            p.seller_id as "product.sellerId",
+            u.username as "product.sellerName",
+            p.status as "product.status"
+        FROM cart c
+                 LEFT JOIN products p ON c.product_id = p.product_id
+                 LEFT JOIN users u ON p.seller_id = u.user_id
+        WHERE c.user_id = #{userId}
+        ORDER BY p.seller_id, c.created_at DESC
+    </select>
+
+    <!-- 根据ID查询购物车项 -->
+    <select id="selectById" resultType="com.coding24h.mall_spring.entity.Cart">
+        SELECT * FROM cart
+        WHERE cart_id = #{cartId}
+    </select>
+
+    <!-- 更新数量 -->
+    <update id="updateQuantity">
+        UPDATE cart
+        SET quantity = #{quantity}, updated_at = NOW()
+        WHERE cart_id = #{cartId}
+    </update>
+
+    <!-- 根据ID删除 -->
+    <delete id="deleteById">
+        DELETE FROM cart
+        WHERE cart_id = #{cartId}
+    </delete>
+
+    <!-- 根据用户ID删除所有购物车项 -->
+    <delete id="deleteByUserId">
+        DELETE FROM cart
+        WHERE user_id = #{userId}
+    </delete>
+
+</mapper>

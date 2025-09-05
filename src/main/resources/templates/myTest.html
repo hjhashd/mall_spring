@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebSocket连接问题诊断</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    body {
+      background: linear-gradient(135deg, #f5f7fa 0%, #e4efe9 100%);
+      color: #2d3a2d;
+      line-height: 1.6;
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 30px;
+      padding: 20px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    }
+
+    h1 {
+      color: #5c9e53;
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      color: #7a8b7a;
+      font-size: 18px;
+    }
+
+    .dashboard {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    @media (max-width: 900px) {
+      .dashboard {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 25px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #eef0f2;
+    }
+
+    .card-header i {
+      font-size: 24px;
+      margin-right: 12px;
+      color: #5c9e53;
+    }
+
+    .card-header h2 {
+      color: #2d3a2d;
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      margin-bottom: 15px;
+      padding: 12px;
+      border-radius: 8px;
+      background: #f8faf8;
+    }
+
+    .status-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 15px;
+      flex-shrink: 0;
+    }
+
+    .status-success {
+      background: #e6f4e6;
+      color: #5c9e53;
+    }
+
+    .status-error {
+      background: #fde9e9;
+      color: #e74c3c;
+    }
+
+    .status-warning {
+      background: #fef5e6;
+      color: #f39c12;
+    }
+
+    .status-info {
+      background: #e6f0fa;
+      color: #3498db;
+    }
+
+    .status-content h3 {
+      margin-bottom: 5px;
+      font-size: 16px;
+    }
+
+    .status-content p {
+      color: #7a8b7a;
+      font-size: 14px;
+    }
+
+    .log-output {
+      background: #2d3a2d;
+      color: #f8faf8;
+      padding: 20px;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 14px;
+      line-height: 1.5;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 20px;
+    }
+
+    .log-entry {
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #3d4d3d;
+    }
+
+    .log-error {
+      color: #e74c3c;
+    }
+
+    .log-warning {
+      color: #f39c12;
+    }
+
+    .log-info {
+      color: #3498db;
+    }
+
+    .log-success {
+      color: #5c9e53;
+    }
+
+    .solution-section {
+      margin-top: 30px;
+    }
+
+    .solution-list {
+      list-style-type: none;
+    }
+
+    .solution-list li {
+      margin-bottom: 15px;
+      padding: 15px;
+      background: #f8faf8;
+      border-left: 4px solid #5c9e53;
+      border-radius: 4px;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 15px;
+      margin-top: 20px;
+    }
+
+    button {
+      padding: 12px 20px;
+      border: none;
+      border-radius: 8px;
+      background: #5c9e53;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.3s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    button:hover {
+      background: #4a8c42;
+    }
+
+    button.secondary {
+      background: #3498db;
+    }
+
+    button.secondary:hover {
+      background: #2980b9;
+    }
+
+    button.warning {
+      background: #f39c12;
+    }
+
+    button.warning:hover {
+      background: #e67e22;
+    }
+
+    .token-info {
+      background: #f8faf8;
+      padding: 15px;
+      border-radius: 8px;
+      margin-top: 20px;
+      font-size: 14px;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>WebSocket连接问题诊断</h1>
+    <p class="subtitle">诊断和解决API认证与WebSocket连接问题</p>
+  </header>
+
+  <div class="dashboard">
+    <div class="card">
+      <div class="card-header">
+        <i class="fas fa-plug"></i>
+        <h2>连接状态</h2>
+      </div>
+
+      <div class="status">
+        <div class="status-icon status-error">
+          <i class="fas fa-times"></i>
+        </div>
+        <div class="status-content">
+          <h3>API认证失败</h3>
+          <p>GET /api/chat/chats 返回401 (Unauthorized)</p>
+        </div>
+      </div>
+
+      <div class="status">
+        <div class="status-icon status-error">
+          <i class="fas fa-times"></i>
+        </div>
+        <div class="status-content">
+          <h3>WebSocket连接失败</h3>
+          <p>WebSocket connection to 'ws://localhost:3000/ws?userId=3' failed</p>
+        </div>
+      </div>
+
+      <div class="status">
+        <div class="status-icon status-success">
+          <i class="fas fa-check"></i>
+        </div>
+        <div class="status-content">
+          <h3>Token状态正常</h3>
+          <p>Token存在且格式正确</p>
+        </div>
+      </div>
+
+      <div class="status">
+        <div class="status-icon status-warning">
+          <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        <div class="status-content">
+          <h3>代理配置检查</h3>
+          <p>需要确认Vite代理设置是否正确</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <i class="fas fa-terminal"></i>
+        <h2>错误日志</h2>
+      </div>
+
+      <div class="log-output">
+        <div class="log-entry log-info">
+          [INFO] Token status: eyJhbGciOiJIUzI1NiJ9.eyJyb2xlcyI6W3siYXV0aG9yaXR5IjoiUk9MRV9BRE1JTiJ9LHsiYXV0aG9yaXR5IjoiUk9MRV9TRUxMRVIifV0sInVzZXJJZCI6Mywic3ViIjoiYWRtaW4iLCJpYXQiOjE3NTU2MTY4MDYsImV4cCI6MTc1NTY2MDAwNn0.PIg5aedwdYPH8UvcrgdMf4i-j__UKCg_O0b08_ZqRxs Type: string
+        </div>
+        <div class="log-entry log-info">
+          [INFO] Is logged in: true
+        </div>
+        <div class="log-entry log-error">
+          [ERROR] GET http://localhost:3000/api/chat/chats 401 (Unauthorized)
+        </div>
+        <div class="log-entry log-warning">
+          [WARNING] API endpoint returned 401 but token is valid - endpoint may not be implemented
+        </div>
+        <div class="log-entry log-error">
+          [ERROR] GET http://localhost:3000/api/chat/chats/101/messages 401 (Unauthorized)
+        </div>
+        <div class="log-entry log-error">
+          [ERROR] WebSocket connection to 'ws://localhost:3000/ws?userId=3' failed
+        </div>
+        <div class="log-entry log-error">
+          [ERROR] WebSocket connection failed, continuing without real-time updates: Error: WebSocket connection timeout
+        </div>
+      </div>
+
+      <div class="action-buttons">
+        <button onclick="simulateTokenCheck()">
+          <i class="fas fa-key"></i> 检查Token
+        </button>
+        <button class="secondary" onclick="simulateApiTest()">
+          <i class="fas fa-bolt"></i> 测试API连接
+        </button>
+        <button class="warning" onclick="simulateWsTest()">
+          <i class="fas fa-satellite-dish"></i> 测试WebSocket
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card solution-section">
+    <div class="card-header">
+      <i class="fas fa-tools"></i>
+      <h2>解决方案</h2>
+    </div>
+
+    <ul class="solution-list">
+      <li>
+        <strong>检查后端API认证中间件</strong> - 确认后端正确处理Bearer token认证，检查Authorization头是否被正确解析
+      </li>
+      <li>
+        <strong>验证代理配置</strong> - 确认Vite代理设置正确指向后端服务器（当前指向http://localhost:8080）
+      </li>
+      <li>
+        <strong>检查WebSocket服务器</strong> - 确保WebSocket服务器在端口8080上运行并正确处理连接
+      </li>
+      <li>
+        <strong>验证CORS设置</strong> - 确保后端服务器配置了正确的CORS策略允许前端Origin
+      </li>
+      <li>
+        <strong>检查Token有效期</strong> - 虽然Token格式正确，但需要确认其是否在有效期内
+      </li>
+    </ul>
+
+    <div class="action-buttons">
+      <button onclick="location.reload()">
+        <i class="fas fa-redo"></i> 重新检查
+      </button>
+      <button class="secondary" onclick="showTokenDetails()">
+        <i class="fas fa-info-circle"></i> 显示Token详情
+      </button>
+    </div>
+
+    <div id="tokenDetails" class="token-info" style="display: none;">
+      <h3>Token解析详情</h3>
+      <p><strong>Header:</strong> eyJhbGciOiJIUzI1NiJ9</p>
+      <p><strong>Payload:</strong> eyJyb2xlcyI6W3siYXV0aG9yaXR5IjoiUk9MRV9BRE1JTiJ9LHsiYXV0aG9yaXR5IjoiUk9MRV9TRUxMRVIifV0sInVzZXJJZCI6Mywic3ViIjoiYWRtaW4iLCJpYXQiOjE3NTU2MTY4MDYsImV4cCI6MTc1NTY2MDAwNn0</p>
+      <p><strong>Signature:</strong> PIg5aedwdYPH8UvcrgdMf4i-j__UKCg_O0b08_ZqRxs</p>
+      <p><strong>算法:</strong> HS256</p>
+      <p><strong>用户ID:</strong> 3</p>
+      <p><strong>用户名:</strong> admin</p>
+      <p><strong>角色:</strong> ROLE_ADMIN, ROLE_SELLER</p>
+      <p><strong>签发时间:</strong> 2025-08-20 10:00:06 UTC</p>
+      <p><strong>过期时间:</strong> 2025-08-20 22:00:06 UTC</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  function simulateTokenCheck() {
+    alert('Token检查完成：\n- Token格式有效\n- 用户ID: 3\n- 角色: ROLE_ADMIN, ROLE_SELLER\n- 有效期: 12小时');
+  }
+
+  function simulateApiTest() {
+    alert('API连接测试：\n- 前端代理配置: 正常\n- 后端服务器状态: 未知\n- 认证中间件: 需要检查\n\n建议：检查后端服务器是否运行在端口8080上');
+  }
+
+  function simulateWsTest() {
+    alert('WebSocket测试：\n- WebSocket服务器: 未响应\n- 连接超时: 5秒\n\n建议：检查WebSocket服务器是否运行并配置正确路径');
+  }
+
+  function showTokenDetails() {
+    const tokenDetails = document.getElementById('tokenDetails');
+    tokenDetails.style.display = tokenDetails.style.display === 'none' ? 'block' : 'none';
+  }
+
+  // 模拟实时日志更新
+  setTimeout(() => {
+    const logOutput = document.querySelector('.log-output');
+    const newLog = document.createElement('div');
+    newLog.className = 'log-entry log-info';
+    newLog.textContent = '[INFO] 诊断完成于 ' + new Date().toLocaleTimeString();
+    logOutput.appendChild(newLog);
+    logOutput.scrollTop = logOutput.scrollHeight;
+  }, 2000);
+</script>
+</body>
+</html>

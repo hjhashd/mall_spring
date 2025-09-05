@@ -1,0 +1,325 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.coding24h.mall_spring.mapper.review.ReviewMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="ReviewResultMap" type="com.coding24h.mall_spring.entity.Review">
+        <id column="review_id" property="reviewId"/>
+        <result column="order_item_id" property="orderItemId"/>
+        <result column="user_id" property="userId"/>
+        <result column="rating" property="rating"/>
+        <result column="content" property="content"/>
+        <result column="image_urls" property="imageUrls"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="seller_reply" property="sellerReply"/>
+        <result column="is_anonymous" property="isAnonymous"/>
+        <result column="has_append" property="hasAppend"/>
+        <result column="deleted" property="deleted"/>
+        <!-- 关联字段 -->
+        <result column="username" property="username"/>
+        <result column="user_avatar" property="userAvatar"/>
+        <result column="title" property="productName"/>
+        <!-- 1. 首先，为了能在列表页显示商品图片，需在 ReviewResultMap 中增加一个字段映射 -->
+        <result column="product_image" property="productImage"/>
+    </resultMap>
+
+    <resultMap id="ReplyResultMap" type="com.coding24h.mall_spring.entity.Reply">
+        <id column="reply_id" property="replyId"/>
+        <result column="content" property="content"/>
+        <result column="create_time" property="createTime"/>
+        <result column="user_id" property="userId"/>
+        <result column="review_id" property="reviewId"/>
+        <result column="replied_to_user_id" property="repliedToUserId"/>
+        <result column="replied_to_username" property="repliedToUsername"/>
+        <result column="is_append" property="isAppend"/>
+        <!-- 用户信息 -->
+        <result column="reply_username" property="username"/>
+        <result column="reply_avatar" property="userAvatar"/>
+    </resultMap>
+
+    <!-- 【关键修改】在 selectAllReviews 查询中增加 sellerId 的过滤条件 -->
+    <select id="selectAllReviews" resultMap="ReviewResultMap">
+        SELECT
+        <include refid="ReviewBaseColumns"/>,
+        <include refid="UserInfoColumns"/>,
+        <include refid="ProductInfoColumns"/>,
+        (SELECT pi.image_url
+        FROM product_images pi
+        WHERE pi.product_id = p.product_id AND pi.is_main = 1
+        LIMIT 1) as product_image
+        FROM reviews r
+        LEFT JOIN users u ON r.user_id = u.user_id
+        LEFT JOIN order_items oi ON r.order_item_id = oi.item_id
+        LEFT JOIN products p ON oi.product_id = p.product_id
+        WHERE r.deleted = 0
+        <!-- 4. 添加 sellerId 的动态SQL判断 -->
+        <if test="sellerId != null">
+            AND p.seller_id = #{sellerId}
+        </if>
+        <if test="rating != null">
+            AND r.rating = #{rating}
+        </if>
+        <if test="hasImage != null and hasImage == true">
+            AND r.image_urls IS NOT NULL AND r.image_urls != ''
+        </if>
+        <if test="hasImage != null and hasImage == false">
+            AND (r.image_urls IS NULL OR r.image_urls = '')
+        </if>
+        <if test="hasSellerReply != null and hasSellerReply == true">
+            AND r.seller_reply IS NOT NULL AND r.seller_reply != ''
+        </if>
+        <if test="hasSellerReply != null and hasSellerReply == false">
+            AND (r.seller_reply IS NULL OR r.seller_reply = '')
+        </if>
+        ORDER BY
+        <choose>
+            <when test="sort == 'rating'">r.rating</when>
+            <when test="sort == 'created_at'">r.created_at</when>
+            <otherwise>r.created_at</otherwise>
+        </choose>
+        <choose>
+            <when test="order == 'asc'">ASC</when>
+            <otherwise>DESC</otherwise>
+        </choose>
+    </select>
+
+
+    <!-- 评分分布结果映射 -->
+    <resultMap id="RatingDistributionResultMap" type="com.coding24h.mall_spring.entity.vo.RatingDistributionVO">
+        <result column="stars" property="stars"/>
+        <result column="count" property="count"/>
+        <result column="percentage" property="percentage"/>
+    </resultMap>
+
+    <!-- 评分统计结果映射 -->
+    <resultMap id="RatingSummaryResultMap" type="com.coding24h.mall_spring.entity.vo.RatingSummaryVO">
+        <result column="total" property="total"/>
+        <result column="average" property="average"/>
+        <collection property="distribution" resultMap="RatingDistributionResultMap"/>
+    </resultMap>
+
+    <!-- 基础查询字段 -->
+    <sql id="ReviewBaseColumns">
+        r.review_id, r.order_item_id, r.user_id, r.rating, r.content,
+        r.image_urls, r.created_at, r.seller_reply, r.is_anonymous,
+        r.has_append, r.deleted
+    </sql>
+
+    <!-- 用户信息字段 -->
+    <sql id="UserInfoColumns">
+        u.username, u.avatar_path as user_avatar
+    </sql>
+
+    <!-- 商品信息字段 -->
+    <sql id="ProductInfoColumns">
+        p.title
+    </sql>
+
+    <!-- 分页查询商品评价 -->
+    <select id="selectReviewsByProductId" resultMap="ReviewResultMap">
+        SELECT
+        <include refid="ReviewBaseColumns"/>,
+        <include refid="UserInfoColumns"/>,
+        <include refid="ProductInfoColumns"/>
+        FROM reviews r
+        LEFT JOIN users u ON r.user_id = u.user_id
+        LEFT JOIN order_items oi ON r.order_item_id = oi.item_id
+        LEFT JOIN products p ON oi.product_id = p.product_id
+        WHERE r.deleted = 0
+        AND oi.product_id = #{productId}
+        <if test="rating != null">
+            AND r.rating = #{rating}
+        </if>
+        <if test="hasImage != null and hasImage == true">
+            AND r.image_urls IS NOT NULL AND r.image_urls != ''
+        </if>
+        <if test="hasImage != null and hasImage == false">
+            AND (r.image_urls IS NULL OR r.image_urls = '')
+        </if>
+        <if test="hasSellerReply != null and hasSellerReply == true">
+            AND r.seller_reply IS NOT NULL AND r.seller_reply != ''
+        </if>
+        <if test="hasSellerReply != null and hasSellerReply == false">
+            AND (r.seller_reply IS NULL OR r.seller_reply = '')
+        </if>
+        ORDER BY
+        <choose>
+            <when test="sort == 'rating'">r.rating</when>
+            <when test="sort == 'created_at'">r.created_at</when>
+            <otherwise>r.created_at</otherwise>
+        </choose>
+        <choose>
+            <when test="order == 'asc'">ASC</when>
+            <otherwise>DESC</otherwise>
+        </choose>
+    </select>
+
+
+    <!-- 根据评价ID查询回复列表（过滤被删除的回复） -->
+    <select id="selectRepliesByReviewId" resultMap="ReplyResultMap">
+        SELECT
+        r.reply_id,
+        r.content,
+        r.create_time,
+        r.user_id,
+        r.review_id,
+        r.replied_to_user_id,
+        r.replied_to_username,
+        r.is_append,
+        u.username   AS reply_username,
+        u.avatar_path AS reply_avatar
+        FROM replies r
+        LEFT JOIN users u ON r.user_id = u.user_id
+        WHERE r.review_id = #{reviewId}
+        AND r.deleted = 0        <!-- 只拿未删除的回复 -->
+        ORDER BY r.create_time ASC
+    </select>
+
+    <!-- 获取商品评分统计 -->
+    <select id="selectRatingSummaryByProductId" resultMap="RatingSummaryResultMap">
+        SELECT
+            COUNT(*) as total,
+            ROUND(AVG(r.rating), 1) as average
+        FROM reviews r
+                 LEFT JOIN order_items oi ON r.order_item_id = oi.item_id
+        WHERE r.deleted = 0
+          AND oi.product_id = #{productId}
+    </select>
+
+    <!-- 获取评分分布 -->
+    <select id="selectRatingDistributionByProductId" resultMap="RatingDistributionResultMap">
+        SELECT
+            r.rating as stars,
+            COUNT(*) as count,
+            ROUND(COUNT(*) * 100.0 / (
+                SELECT COUNT(*)
+                FROM reviews r2
+                LEFT JOIN order_items oi2 ON r2.order_item_id = oi2.item_id
+                WHERE r2.deleted = 0 AND oi2.product_id = #{productId}
+                ), 0) as percentage
+        FROM reviews r
+            LEFT JOIN order_items oi ON r.order_item_id = oi.item_id
+        WHERE r.deleted = 0
+          AND oi.product_id = #{productId}
+        GROUP BY r.rating
+        ORDER BY r.rating DESC
+    </select>
+
+    <!-- 获取评价总数 -->
+    <select id="selectReviewCountByProductId" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        FROM reviews r
+                 LEFT JOIN order_items oi ON r.order_item_id = oi.item_id
+        WHERE r.deleted = 0
+          AND oi.product_id = #{productId}
+    </select>
+
+    <!-- 获取平均评分 -->
+    <select id="selectAverageRatingByProductId" resultType="java.lang.Double">
+        SELECT ROUND(AVG(r.rating), 1)
+        FROM reviews r
+                 LEFT JOIN order_items oi ON r.order_item_id = oi.item_id
+        WHERE r.deleted = 0
+          AND oi.product_id = #{productId}
+    </select>
+
+    <!-- 检查用户是否已评价该订单项 -->
+    <select id="selectReviewByOrderItemId" resultMap="ReviewResultMap">
+        SELECT
+        <include refid="ReviewBaseColumns"/>
+        FROM reviews r
+        WHERE r.deleted = 0
+        AND r.order_item_id = #{orderItemId}
+        LIMIT 1
+    </select>
+
+
+    <!-- 获取用户评价列表 -->
+    <select id="selectReviewsByUserId" resultMap="ReviewResultMap">
+        SELECT
+        <include refid="ReviewBaseColumns"/>,
+        <include refid="ProductInfoColumns"/>
+        FROM reviews r
+        LEFT JOIN order_items oi ON r.order_item_id = oi.item_id
+        LEFT JOIN products p ON oi.product_id = p.product_id
+        WHERE r.deleted = 0
+        AND r.user_id = #{userId}
+        ORDER BY r.created_at DESC
+    </select>
+
+    <!-- 获取待评价订单列表 -->
+    <select id="selectPendingReviewsByUserId" resultMap="ReviewResultMap">
+        SELECT
+        oi.item_id as order_item_id,
+        oi.product_id,
+        oi.product_name,
+        oi.product_image,
+        oi.quantity,
+        oi.unit_price,
+        oi.created_at as order_date
+        FROM order_items oi
+        LEFT JOIN orders o ON oi.order_id = o.order_id
+        WHERE o.user_id = #{userId}
+        AND o.status = 4
+        AND oi.is_reviewed = 0
+        AND oi.item_status = 1
+        <!-- 添加商品过滤 -->
+        <if test="productId != null">
+            AND oi.product_id = #{productId}
+        </if>
+        ORDER BY oi.created_at DESC
+    </select>
+
+    <!-- 更新评价的追评状态 -->
+    <update id="updateAppendStatus">
+        UPDATE reviews
+        SET has_append = #{hasAppend}
+        WHERE review_id = #{reviewId}
+    </update>
+
+    <!-- 添加卖家回复 -->
+    <update id="updateSellerReply">
+        UPDATE reviews
+        SET seller_reply = #{sellerReply}
+        WHERE review_id = #{reviewId}
+    </update>
+
+    <select id="countByOrderItemId" resultType="int">
+        SELECT COUNT(*) FROM reviews WHERE order_item_id = #{orderItemId} AND deleted = 0
+    </select>
+    <!-- 插入评价 -->
+    <insert id="insertReview" parameterType="com.coding24h.mall_spring.entity.Review" useGeneratedKeys="true" keyProperty="reviewId">
+        INSERT INTO reviews (
+            order_item_id, user_id, rating, content, image_urls,
+            created_at, seller_reply, is_anonymous, has_append, deleted,Product_id
+        ) VALUES (
+                     #{orderItemId}, #{userId}, #{rating}, #{content}, #{imageUrls},
+                     #{createdAt}, #{sellerReply}, #{isAnonymous}, #{hasAppend}, #{deleted},#{productId}
+                 )
+    </insert>
+
+    <!-- 根据ID查询评价 -->
+    <select id="selectReviewById" resultMap="ReviewResultMap">
+        SELECT
+        <include refid="ReviewBaseColumns"/>
+        FROM reviews r
+        WHERE r.deleted = 0
+        AND r.review_id = #{reviewId}
+    </select>
+
+    <!-- 根据ID删除评价（逻辑删除） -->
+    <update id="deleteReviewById">
+        UPDATE reviews
+        SET deleted = 1
+        WHERE review_id = #{reviewId}
+    </update>
+
+    <!-- 获取用户评价总数 -->
+    <select id="selectReviewCountByUserId" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        FROM reviews r
+        WHERE r.deleted = 0
+          AND r.user_id = #{userId}
+    </select>
+
+</mapper>

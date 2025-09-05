@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.coding24h.mall_spring.mapper.ContentModerationMapper">
+
+    <insert id="insertModeration" parameterType="com.coding24h.mall_spring.entity.ContentModeration">
+        INSERT INTO content_moderations (
+            content_type, content_id, content, status, created_at,updated_at
+        ) VALUES (
+            'product', #{contentId}, #{content}, 0, NOW(),NOW()
+        )
+    </insert>
+
+    <update id="updateModerationStatus">
+        UPDATE content_moderations
+        SET status = #{status}, reason = #{reason},
+            moderator_id = #{moderatorId}, processed_at = NOW()
+        WHERE content_id = #{contentId} AND content_type = 'product'
+    </update>
+
+    <!-- 根据内容ID获取审核记录 -->
+    <select id="getModerationByContentId" resultType="com.coding24h.mall_spring.entity.ContentModeration">
+        SELECT * FROM content_moderations
+        WHERE content_type = 'product' AND content_id = #{contentId}
+    </select>
+
+    <!-- 更新审核记录 -->
+    <update id="updateModeration" parameterType="com.coding24h.mall_spring.entity.ContentModeration">
+        UPDATE content_moderations
+        SET
+            content = #{content},
+            status = #{status},
+            updated_at = NOW()
+        WHERE moderation_id = #{moderationId}
+    </update>
+
+    <select id="getStatusByContentIdAndType" resultType="java.lang.Integer">
+        SELECT status FROM content_moderations WHERE content_id = #{contentId} AND content_type = #{contentType}
+    </select>
+</mapper>

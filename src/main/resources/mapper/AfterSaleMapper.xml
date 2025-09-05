@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.coding24h.mall_spring.mapper.AfterSaleMapper">
+
+    <resultMap id="AfterSaleApplicationDTOResultMap" type="com.coding24h.mall_spring.dto.order.AfterSaleApplicationDTO">
+        <id property="afterSaleId" column="after_sale_id"/>
+        <result property="orderItemId" column="order_item_id"/>
+        <result property="type" column="type"/>
+        <result property="reason" column="reason"/>
+        <result property="status" column="status"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="refundAmount" column="refund_amount"/>
+        <result property="evidenceImages" column="evidence_images"/>
+        <result property="sellerRemark" column="seller_remark"/>
+        <result property="adminRemark" column="admin_remark"/>
+        <!-- 关联查询的字段 -->
+        <result property="orderId" column="order_id"/>
+        <result property="productName" column="product_name"/>
+        <result property="productImage" column="product_image"/>
+        <result property="quantity" column="quantity"/>
+        <result property="totalPrice" column="total_price"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.coding24h.mall_spring.entity.AfterSales" useGeneratedKeys="true" keyProperty="afterSaleId">
+        INSERT INTO after_sales (order_item_id, `type`, reason, `status`, created_at, refund_amount, evidence_images)
+        VALUES (#{orderItemId}, #{type}, #{reason}, #{status}, #{createdAt}, #{refundAmount}, #{evidenceImages})
+    </insert>
+
+    <select id="selectById" parameterType="int" resultType="com.coding24h.mall_spring.entity.AfterSales">
+        SELECT * FROM after_sales WHERE after_sale_id = #{afterSaleId}
+    </select>
+
+    <update id="updateStatus" parameterType="com.coding24h.mall_spring.entity.AfterSales">
+        UPDATE after_sales
+        SET
+            `status` = #{status},
+            processed_at = #{processedAt},
+            completed_at = #{completedAt},
+            seller_remark = #{sellerRemark},
+            admin_remark = #{adminRemark}
+        WHERE after_sale_id = #{afterSaleId}
+    </update>
+
+    <select id="findAfterSaleApplicationsBySellerId" parameterType="int" resultMap="AfterSaleApplicationDTOResultMap">
+        SELECT
+            a.*,
+            oi.product_name,
+            oi.product_image,
+            oi.quantity,
+            oi.total_price,
+            o.order_id
+        FROM
+            after_sales a
+                JOIN
+            order_items oi ON a.order_item_id = oi.item_id
+                JOIN
+            orders o ON oi.order_id = o.order_id
+        WHERE
+            o.seller_id = #{sellerId}
+        ORDER BY
+            a.created_at DESC
+    </select>
+
+    <!-- 新增：查询所有售后申请（管理员视角） -->
+    <select id="findAllAdminApplications" resultMap="AfterSaleApplicationDTOResultMap">
+        SELECT
+            a.*,
+            oi.product_name,
+            oi.product_image,
+            oi.quantity,
+            oi.total_price,
+            o.order_id
+        FROM
+            after_sales a
+                JOIN
+            order_items oi ON a.order_item_id = oi.item_id
+                JOIN
+            orders o ON oi.order_id = o.order_id
+        ORDER BY
+            a.created_at DESC
+    </select>
+
+    <!-- 新增：根据状态查询售后申请 -->
+    <select id="findApplicationsByStatus" parameterType="int" resultMap="AfterSaleApplicationDTOResultMap">
+        SELECT
+            a.*,
+            oi.product_name,
+            oi.product_image,
+            oi.quantity,
+            oi.total_price,
+            o.order_id
+        FROM
+            after_sales a
+                JOIN
+            order_items oi ON a.order_item_id = oi.item_id
+                JOIN
+            orders o ON oi.order_id = o.order_id
+        WHERE
+            a.status = #{status}
+        ORDER BY
+            a.created_at DESC
+    </select>
+
+    <select id="findPendingAdminApplications" resultMap="AfterSaleApplicationDTOResultMap">
+        SELECT
+            a.*,
+            oi.product_name,
+            oi.product_image,
+            oi.quantity,
+            oi.total_price,
+            o.order_id
+        FROM
+            after_sales a
+                JOIN
+            order_items oi ON a.order_item_id = oi.item_id
+                JOIN
+            orders o ON oi.order_id = o.order_id
+        WHERE
+            a.status = 5  -- 筛选出所有待平台处理的申请
+        ORDER BY
+            a.created_at ASC -- 建议按时间升序，优先处理最早的申请
+    </select>
+
+</mapper>

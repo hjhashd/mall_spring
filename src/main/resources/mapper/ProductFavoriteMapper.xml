@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.coding24h.mall_spring.mapper.ProductFavoriteMapper">
+
+    <select id="isFavorited" resultType="int">
+        SELECT count(*)
+        FROM product_favorites
+        WHERE user_id = #{userId} AND product_id = #{productId}
+    </select>
+
+    <insert id="addFavorite">
+        INSERT INTO product_favorites (user_id, product_id)
+        VALUES (#{userId}, #{productId})
+    </insert>
+
+    <delete id="removeFavorite">
+        DELETE FROM product_favorites
+        WHERE user_id = #{userId} AND product_id = #{productId}
+    </delete>
+
+    <update id="updateFavoriteCount">
+        UPDATE products
+        SET favorite_count = favorite_count + #{increment}
+        WHERE product_id = #{productId}
+    </update>
+
+        <select id="countUserFavorites" resultType="int">
+            SELECT COUNT(*)
+            FROM product_favorites
+            WHERE user_id = #{userId}
+        </select>
+
+
+    <!-- 取收藏商品 + 商品信息 + 封面图（示例：取第一张图或封面图） -->
+    <select id="listUserFavorites" resultType="com.coding24h.mall_spring.dto.FavoriteProductDTO">
+        SELECT
+        p.product_id       AS productId,
+        p.title            AS title,
+        p.price            AS currentPrice,
+        p.original_price   AS originalPrice,
+        COALESCE(pi.image_url, (SELECT image_url FROM product_images WHERE product_id = p.product_id ORDER BY sort_order LIMIT 1), '') AS imageUrl,
+        p.location         AS location,
+        p.created_at       AS createdAt
+        FROM product_favorites f
+        JOIN products p ON p.product_id = f.product_id
+        LEFT JOIN product_images pi ON pi.product_id = p.product_id AND pi.is_main = 1
+        WHERE f.user_id = #{userId}
+        <choose>
+            <when test="sort == 'discount'">
+                ORDER BY (p.original_price - p.price) / NULLIF(p.original_price, 0) DESC
+            </when>
+            <when test="sort == 'priceAsc'">
+                ORDER BY p.price ASC
+            </when>
+            <when test="sort == 'priceDesc'">
+                ORDER BY p.price DESC
+            </when>
+            <otherwise>
+                ORDER BY p.created_at DESC
+            </otherwise>
+        </choose>
+    </select>
+</mapper>

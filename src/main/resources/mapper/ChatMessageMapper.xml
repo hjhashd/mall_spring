@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.coding24h.mall_spring.mapper.chat.ChatMessageMapper">
+
+    <resultMap id="ChatMessageMap" type="com.coding24h.mall_spring.entity.chat.ChatMessage">
+        <id column="message_id" property="messageId"/>
+        <result column="chat_id" property="chatId"/>
+        <result column="sender_id" property="senderId"/>
+        <result column="content" property="content"/>
+        <result column="is_read" property="isRead"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="message_type" property="messageType"/>
+        <result column="attachment_url" property="attachmentUrl"/>
+        <result column="sender_name" property="senderName"/>
+        <result column="sender_avatar" property="senderAvatar"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.coding24h.mall_spring.entity.chat.ChatMessage" useGeneratedKeys="true" keyProperty="messageId">
+        INSERT INTO chat_messages
+        (chat_id, sender_id, content, is_read, created_at, message_type, attachment_url)
+        VALUES
+            (#{chatId}, #{senderId}, #{content}, #{isRead}, NOW(), #{messageType}, #{attachmentUrl})
+    </insert>
+
+
+    <select id="selectByChatId" resultMap="ChatMessageMap">
+        SELECT
+            cm.*,
+            u.username AS sender_name,
+            u.avatar_path AS sender_avatar
+        FROM chat_messages cm
+                 JOIN users u ON cm.sender_id = u.user_id
+        WHERE cm.chat_id = #{chatId}
+        ORDER BY cm.created_at ASC, cm.message_id ASC
+    </select>
+
+    <update id="markReadByChatAndReader">
+        UPDATE chat_messages
+        SET is_read = 1
+        WHERE chat_id = #{chatId}
+          AND sender_id != #{readerId}
+          AND is_read = 0
+    </update>
+
+    <delete id="deleteById" parameterType="java.lang.Integer">
+        DELETE FROM chat_messages WHERE message_id = #{messageId}
+    </delete>
+
+    <select id="selectById" parameterType="java.lang.Integer" resultMap="ChatMessageMap">
+        SELECT
+            cm.*,
+            u.username AS sender_name,
+            u.avatar_path AS sender_avatar
+        FROM
+            chat_messages cm
+                JOIN
+            users u ON cm.sender_id = u.user_id
+        WHERE
+            cm.message_id = #{messageId}
+    </select>
+
+    <select id="findAllByChatId" parameterType="java.lang.Integer" resultMap="ChatMessageMap">
+        SELECT
+            cm.*,
+            u.username AS sender_name,
+            u.avatar_path AS sender_avatar
+        FROM
+            chat_messages cm
+                JOIN
+            users u ON cm.sender_id = u.user_id
+        WHERE
+            cm.chat_id = #{chatId}
+    </select>
+</mapper>

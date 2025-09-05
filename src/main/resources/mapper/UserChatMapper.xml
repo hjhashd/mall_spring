@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.coding24h.mall_spring.mapper.chat.UserChatMapper">
+    <resultMap id="UserChatMap" type="com.coding24h.mall_spring.entity.chat.UserChat">
+        <id column="chat_id" property="chatId"/>
+        <result column="user1_id" property="user1Id"/>
+        <result column="user2_id" property="user2Id"/>
+        <result column="last_message" property="lastMessage"/>
+        <result column="last_message_time" property="lastMessageTime"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="unread_count" property="unreadCount"/>
+        <result column="order_id" property="orderId"/>
+        <!-- 用户名字段 -->
+        <result column="user1_name" property="user1Name"/>
+        <result column="user2_name" property="user2Name"/>
+        <!-- 新增头像字段 -->
+        <result column="user1_avatar" property="user1Avatar"/>
+        <result column="user2_avatar" property="user2Avatar"/>
+    </resultMap>
+
+
+    <update id="updateLastMessage">
+        UPDATE user_chats
+        SET last_message = #{lastMessage},
+        last_message_time = #{lastMessageTime}
+        WHERE chat_id = #{chatId}
+    </update>
+
+    <update id="incrementUnreadForUser1">
+        UPDATE user_chats
+        SET unread_count_user1 = COALESCE(unread_count_user1, 0) + 1
+        WHERE chat_id = #{chatId}
+    </update>
+
+    <update id="incrementUnreadForUser2">
+        UPDATE user_chats
+        SET unread_count_user2 = COALESCE(unread_count_user2, 0) + 1
+        WHERE chat_id = #{chatId}
+    </update>
+    <select id="selectChatsByUser" resultMap="UserChatMap">
+        SELECT
+            uc.chat_id,
+            uc.user1_id,
+            uc.user2_id,
+            uc.last_message,
+            uc.last_message_time,
+            uc.created_at,
+            uc.order_id,
+            u1.username AS user1_name,
+            u1.avatar_path AS user1_avatar,
+            u2.username AS user2_name,
+            u2.avatar_path AS user2_avatar,
+            -- 【核心修改】使用 CASE 语句动态选择未读数, 并将其别名设为 unread_count 以匹配 resultMap
+            CASE
+                WHEN uc.user1_id = #{userId} THEN uc.unread_count_user1
+                WHEN uc.user2_id = #{userId} THEN uc.unread_count_user2
+                ELSE 0
+                END AS unread_count
+        FROM
+            user_chats uc
+                JOIN
+            users u1 ON uc.user1_id = u1.user_id
+                JOIN
+            users u2 ON uc.user2_id = u2.user_id
+        WHERE
+            uc.user1_id = #{userId} OR uc.user2_id = #{userId}
+        ORDER BY
+            COALESCE(uc.last_message_time, uc.created_at) DESC
+    </select>
+
+    <select id="selectById" resultMap="UserChatMap">
+        SELECT * FROM user_chats WHERE chat_id = #{chatId}
+    </select>
+
+    <update id="resetUnreadForUser1">
+        UPDATE user_chats
+        SET unread_count_user1 = 0
+        WHERE chat_id = #{chatId}
+    </update>
+
+    <update id="resetUnreadForUser2">
+        UPDATE user_chats
+        SET unread_count_user2 = 0
+        WHERE chat_id = #{chatId}
+    </update>
+
+    <delete id="deleteById" parameterType="java.lang.Integer">
+        DELETE FROM user_chats WHERE chat_id = #{chatId}
+    </delete>
+
+    <!-- Add this new select statement to find a chat by two user IDs -->
+    <select id="findByUserIds" resultMap="UserChatMap">
+        SELECT * FROM user_chats
+        WHERE (user1_id = #{user1Id} AND user2_id = #{user2Id})
+           OR (user1_id = #{user2Id} AND user2_id = #{user1Id})
+            LIMIT 1
+    </select>
+
+    <!-- Add this insert statement to create a new chat -->
+    <!-- useGeneratedKeys="true" and keyProperty="chatId" are crucial to get the new ID back -->
+    <insert id="insert" parameterType="com.coding24h.mall_spring.entity.chat.UserChat" useGeneratedKeys="true" keyProperty="chatId">
+        INSERT INTO user_chats (user1_id, user2_id, last_message_time)
+        VALUES (#{user1Id}, #{user2Id}, NOW())
+    </insert>
+
+    <!--
+      这个查询通过 chatId 获取单个聊天的完整信息，
+      包括 JOIN users 表得到的双方用户名和头像。
+      这是最高效的解决方案。
+    -->
+    <select id="findDetailedChatById" resultMap="UserChatMap">
+        SELECT
+            uc.chat_id,
+            uc.user1_id,
+            uc.user2_id,
+            uc.last_message,
+            uc.last_message_time,
+            uc.created_at,
+            uc.order_id,
+            u1.username AS user1_name,
+            u1.avatar_path AS user1_avatar,
+            u2.username AS user2_name,
+            u2.avatar_path AS user2_avatar
+        FROM
+            user_chats uc
+                JOIN
+            users u1 ON uc.user1_id = u1.user_id
+                JOIN
+            users u2 ON uc.user2_id = u2.user_id
+        WHERE
+            uc.chat_id = #{chatId}
+    </select>
+</mapper>

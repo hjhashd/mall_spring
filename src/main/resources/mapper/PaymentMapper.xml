@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.coding24h.mall_spring.mapper.PaymentMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="PaymentResultMap" type="com.coding24h.mall_spring.entity.Payment">
+        <id property="paymentId" column="payment_id"/>
+        <result property="orderId" column="order_id"/>
+        <result property="amount" column="amount"/>
+        <result property="paymentMethod" column="payment_method"/>
+        <result property="paymentStatus" column="payment_status"/>
+        <result property="transactionId" column="transaction_id"/>
+        <result property="gatewayResponse" column="gateway_response"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="paidAt" column="paid_at"/>
+        <result property="refundId" column="refund_id"/>
+        <result property="refundedAt" column="refunded_at"/>
+        <result property="refundAmount" column="refund_amount"/>
+    </resultMap>
+
+    <!-- 插入支付记录 -->
+    <insert id="insertPayment" parameterType="com.coding24h.mall_spring.entity.Payment">
+        INSERT INTO payments (
+            order_id,
+            amount,
+            payment_method,
+            payment_status,
+            transaction_id,
+            gateway_response,
+            created_at,
+            paid_at,
+            refund_id,
+            refunded_at,
+            refund_amount
+        ) VALUES (
+            #{orderId},
+            #{amount},
+            #{paymentMethod},
+            #{paymentStatus},
+            #{transactionId},
+            #{gatewayResponse},
+            #{createdAt},
+            #{paidAt},
+            #{refundId},
+            #{refundedAt},
+            #{refundAmount}
+        )
+    </insert>
+
+    <!-- 根据订单ID查询支付记录 -->
+    <select id="selectByOrderId" resultMap="PaymentResultMap">
+        SELECT
+            payment_id,
+            order_id,
+            amount,
+            payment_method,
+            payment_status,
+            transaction_id,
+            gateway_response,
+            created_at,
+            paid_at,
+            refund_id,
+            refunded_at,
+            refund_amount
+        FROM payments
+        WHERE order_id = #{orderId}
+    </select>
+
+</mapper>

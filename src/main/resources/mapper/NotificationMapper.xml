@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.coding24h.mall_spring.mapper.event.NotificationMapper">
+
+    <!-- 结果映射：将数据库列名与Java实体类属性名对应 -->
+    <resultMap id="BaseResultMap" type="com.coding24h.mall_spring.entity.event.MyNotification">
+        <id column="notification_id" property="notificationId" jdbcType="INTEGER"/>
+        <result column="user_id" property="userId" jdbcType="INTEGER"/>
+        <result column="type" property="type" jdbcType="VARCHAR"/>
+        <!-- 【优化点】为 content 字段指定自定义的 TypeHandler -->
+        <result column="content" property="content" jdbcType="VARCHAR" typeHandler="com.coding24h.mall_spring.util.JsonMapTypeHandler"/>
+        <result column="is_read" property="isRead" jdbcType="TINYINT"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <!-- 插入一条通知 -->
+    <!-- 【优化点】这里也需要指定 TypeHandler，以便正确将 Map 转换为 JSON 字符串 -->
+    <insert id="insert" parameterType="com.coding24h.mall_spring.entity.event.MyNotification" useGeneratedKeys="true" keyProperty="notificationId">
+        INSERT INTO notifications (user_id, type, content, is_read, created_at)
+        VALUES (#{userId}, #{type}, #{content, typeHandler=com.coding24h.mall_spring.util.JsonMapTypeHandler}, #{isRead}, #{createdAt})
+    </insert>
+
+    <!-- 根据用户ID查询未读通知 -->
+    <select id="findUnreadByUserId" resultMap="BaseResultMap">
+        SELECT *
+        FROM notifications
+        WHERE user_id = #{userId} AND is_read = 0
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- 根据用户ID查询所有通知 -->
+    <select id="findAllByUserId" resultMap="BaseResultMap">
+        SELECT *
+        FROM notifications
+        WHERE user_id = #{userId}
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- 标记单个通知为已读 -->
+    <update id="markAsRead">
+        UPDATE notifications
+        SET is_read = 1
+        WHERE notification_id = #{notificationId}
+    </update>
+
+    <!-- 标记用户所有通知为已读 -->
+    <update id="markAllAsReadByUserId">
+        UPDATE notifications
+        SET is_read = 1
+        WHERE user_id = #{userId} AND is_read = 0
+    </update>
+
+</mapper>

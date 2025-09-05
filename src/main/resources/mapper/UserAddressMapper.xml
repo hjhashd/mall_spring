@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.coding24h.mall_spring.mapper.UserAddressMapper">
+
+    <!-- 根据用户ID查询地址列表 -->
+    <select id="selectByUserId" resultType="com.coding24h.mall_spring.entity.UserAddress">
+        SELECT * FROM user_addresses
+        WHERE user_id = #{userId} AND is_deleted = 0
+        ORDER BY is_default DESC, created_at DESC
+    </select>
+
+    <!-- 根据ID查询地址 -->
+    <select id="selectById" resultType="com.coding24h.mall_spring.entity.UserAddress">
+        SELECT * FROM user_addresses
+        WHERE address_id = #{addressId} AND is_deleted = 0
+    </select>
+
+    <!-- 查询用户默认地址 -->
+    <select id="selectDefaultByUserId" resultType="com.coding24h.mall_spring.entity.UserAddress">
+        SELECT * FROM user_addresses
+        WHERE user_id = #{userId} AND is_default = 1 AND is_deleted = 0
+            LIMIT 1
+    </select>
+
+    <!-- 插入地址 -->
+    <insert id="insertAddress" parameterType="com.coding24h.mall_spring.entity.UserAddress">
+        INSERT INTO user_addresses (
+            user_id, receiver_name, receiver_phone, province, city, district,
+            detail_address, postal_code, is_default, created_at, updated_at
+        ) VALUES (
+                     #{userId}, #{receiverName}, #{receiverPhone}, #{province}, #{city}, #{district},
+                     #{detailAddress}, #{postalCode}, #{isDefault}, #{createdAt}, #{updatedAt}
+                 )
+    </insert>
+
+    <!-- 更新地址 -->
+    <update id="updateAddress" parameterType="com.coding24h.mall_spring.entity.UserAddress">
+        UPDATE user_addresses
+        SET receiver_name = #{receiverName},
+            receiver_phone = #{receiverPhone},
+            province = #{province},
+            city = #{city},
+            district = #{district},
+            detail_address = #{detailAddress},
+            postal_code = #{postalCode},
+            is_default = #{isDefault},
+            updated_at = #{updatedAt}
+        WHERE address_id = #{addressId}
+    </update>
+
+    <!-- 删除地址 -->
+    <update id="deleteAddress">
+        UPDATE user_addresses
+        SET is_deleted = 1
+        WHERE address_id = #{addressId}
+    </update>
+
+    <!-- 清除用户默认地址 -->
+    <update id="clearDefaultAddress">
+        UPDATE user_addresses
+        SET is_default = 0
+        WHERE user_id = #{userId} AND is_default = 1
+    </update>
+
+    <!-- 设置默认地址 -->
+    <update id="setDefaultAddress">
+        UPDATE user_addresses
+        SET is_default = 1
+        WHERE address_id = #{addressId}
+    </update>
+
+    <select id="selectAllWithUserDetails" resultType="com.coding24h.mall_spring.entity.UserAddress">
+        SELECT
+            ua.address_id,
+            ua.user_id,
+            ua.receiver_name,
+            ua.receiver_phone,
+            ua.province,
+            ua.city,
+            ua.district,
+            ua.detail_address,
+            ua.postal_code,
+            ua.is_default,
+            ua.created_at,
+            u.username AS userName  -- 假设用户表是 users, 用户名字段是 username
+        FROM
+            user_addresses ua
+                LEFT JOIN
+            users u ON ua.user_id = u.user_id -- 假设用户表主键是 user_id
+        WHERE
+            ua.is_deleted = 0
+        ORDER BY
+            ua.created_at DESC
+    </select>
+</mapper>

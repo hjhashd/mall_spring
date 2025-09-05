@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.coding24h.mall_spring.mapper.OrderMapper">
+
+    <!--
+      修改说明:
+      这是一个包含订单、订单项、买家和卖家信息的完整结果映射。
+      - `OrderWithItemsResultMap` 类型变更为 `com.coding24h.mall_spring.dto.order.OrderListDTO`，以匹配查询结果。
+      - 增加了 `sellerId`, `sellerUsername`, `buyerUsername` 等字段的映射，为前端提供更完整的数据。
+    -->
+    <resultMap id="OrderWithItemsResultMap" type="com.coding24h.mall_spring.dto.order.OrderListDTO">
+        <id property="orderId" column="order_id"/>
+        <result property="totalAmount" column="total_amount"/>
+        <result property="status" column="status"/>
+        <result property="paymentMethod" column="payment_method"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="userRemark" column="user_remark"/>
+        <result property="shippingCompany" column="shipping_company"/>
+        <result property="trackingNumber" column="tracking_number"/>
+        <result property="receiverName" column="receiver_name"/>
+        <result property="receiverPhone" column="receiver_phone"/>
+        <result property="shippingAddress" column="shipping_address"/>
+
+        <!-- 新增：买家和卖家信息 -->
+        <result property="buyerId" column="buyer_id"/>
+        <result property="buyerUsername" column="buyer_username"/>
+        <result property="sellerId" column="seller_id"/>
+        <result property="sellerUsername" column="seller_username"/>
+
+        <!-- 关联订单项集合 -->
+        <collection property="items" ofType="com.coding24h.mall_spring.dto.order.OrderItemDTO">
+            <id property="itemId" column="item_id"/>
+            <result property="orderId" column="order_id"/>
+            <result property="productId" column="product_id"/>
+            <result property="productName" column="product_name"/>
+            <result property="productImage" column="product_image"/>
+            <result property="quantity" column="quantity"/>
+            <result property="unitPrice" column="unit_price"/>
+            <result property="totalPrice" column="total_price"/>
+            <result property="condition" column="condition"/>
+            <result property="itemStatus" column="item_status"/>
+            <result property="createdAt" column="item_created_at"/>
+            <result property="isReviewed" column="is_reviewed"/>
+            <result property="afterSaleId" column="after_sale_id"/>
+        </collection>
+    </resultMap>
+
+    <insert id="insertOrder" parameterType="com.coding24h.mall_spring.entity.Order">
+        INSERT INTO orders (
+            order_id, user_id, seller_id, total_amount, status, shipping_address_id,
+            receiver_name, receiver_phone, shipping_address, shipping_company, tracking_number,
+            payment_method, transaction_id, created_at, paid_at, shipped_at, received_at,
+            completed_at, cancelled_at, user_remark, logistics_status
+        ) VALUES (
+                     #{orderId}, #{userId}, #{sellerId}, #{totalAmount}, #{status}, #{shippingAddressId},
+                     #{receiverName}, #{receiverPhone}, #{shippingAddress}, #{shippingCompany}, #{trackingNumber},
+                     #{paymentMethod}, #{transactionId}, #{createdAt}, #{paidAt}, #{shippedAt}, #{receivedAt},
+                     #{completedAt}, #{cancelledAt}, #{userRemark}, #{logisticsStatus}
+                 )
+    </insert>
+
+    <select id="selectByOrderId" resultType="com.coding24h.mall_spring.entity.Order">
+        SELECT * FROM orders
+        WHERE order_id = #{orderId} AND is_deleted = 0
+    </select>
+
+    <!--
+      修改说明 (findOrdersByUserId):
+      - 这是一个经过优化的查询，用于替代原来的 N+1 查询。
+      - 使用 LEFT JOIN 一次性关联 `orders`, `order_items`, 和 `users` (两次，分别作为买家和卖家)。
+      - 查询返回前端需要的所有字段，包括买家和卖家用户名。
+      - 子查询用于获取每个订单项最新的售后ID。
+    -->
+    <select id="findOrdersByUserId" resultMap="OrderWithItemsResultMap">
+        SELECT
+            o.order_id, o.total_amount, o.status, o.payment_method, o.created_at, o.user_remark, o.shipping_company,
+            o.tracking_number, o.receiver_name, o.receiver_phone, o.shipping_address,
+            o.user_id AS buyer_id,
+            buyer.username AS buyer_username,
+            o.seller_id AS seller_id,
+            seller.username AS seller_username,
+            oi.item_id, oi.product_id, oi.product_name, pi.image_url AS product_image, oi.quantity, oi.unit_price, oi.total_price,
+            oi.condition, oi.item_status, oi.created_at AS item_created_at, oi.is_reviewed,
+            (SELECT af.after_sale_id FROM after_sales af WHERE af.order_item_id = oi.item_id ORDER BY af.created_at DESC LIMIT 1) as after_sale_id
+        FROM
+            orders AS o
+            LEFT JOIN order_items AS oi ON o.order_id = oi.order_id
+            LEFT JOIN users AS buyer ON o.user_id = buyer.user_id
+            LEFT JOIN users AS seller ON o.seller_id = seller.user_id
+            LEFT JOIN product_images pi ON oi.product_id = pi.product_id AND pi.is_main = 1
+        WHERE
+            (o.user_id = #{userId} OR o.seller_id = #{userId})
+          AND o.is_deleted = 0
+        ORDER BY
+            o.created_at DESC;
+    </select>
+
+    <select id="findOrderIdByOrderItemId" resultType="java.lang.String">
+        SELECT order_id FROM order_items WHERE item_id = #{orderItemId}
+    </select>
+
+    <select id="selectByUserId" resultType="com.coding24h.mall_spring.entity.Order">
+        SELECT * FROM orders WHERE user_id = #{userId} AND is_deleted = 0 ORDER BY created_at DESC
+    </select>
+
+    <update id="updateOrderStatus">
+        UPDATE orders
+        SET status = #{status}
+        <if test="completedAt != null">, completed_at = #{completedAt}</if>
+        <if test="cancelledAt != null">, cancelled_at = #{cancelledAt}</if>
+        WHERE order_id = #{orderId}
+    </update>
+
+    <update id="updateLogisticsInfo">
+        UPDATE orders SET tracking_number = #{trackingNumber}, logistics_status = #{logisticsStatus} WHERE order_id = #{orderId}
+    </update>
+
+    <update id="softDeleteOrder">
+        UPDATE orders SET is_deleted = 1 WHERE order_id = #{orderId}
+    </update>
+
+    <select id="findOrdersBySellerId" resultMap="OrderWithItemsResultMap">
+        SELECT
+            o.order_id, o.total_amount, o.status, o.payment_method, o.created_at, o.user_remark, o.shipping_company,
+            o.tracking_number, o.receiver_name, o.receiver_phone, o.shipping_address,
+            u.user_id AS buyer_id,
+            u.avatar_path AS buyer_avatar_url,
+            oi.item_id, oi.product_id, oi.product_name, oi.product_image, oi.quantity, oi.unit_price, oi.total_price,
+            oi.condition, oi.item_status, oi.created_at AS item_created_at, oi.is_reviewed
+        FROM
+            orders AS o
+                LEFT JOIN
+            order_items AS oi ON o.order_id = oi.order_id
+                LEFT JOIN
+            users AS u ON o.user_id = u.user_id
+        WHERE
+            o.seller_id = #{sellerId} AND o.is_deleted = 0
+        ORDER BY
+            o.created_at DESC;
+    </select>
+
+    <update id="updateOrderForShipment">
+        UPDATE orders
+        SET
+            status = 3, -- 3: 待收货
+            shipping_company = #{shippingCompany},
+            tracking_number = #{trackingNumber},
+            shipped_at = #{shippedAt}
+        WHERE
+            order_id = #{orderId} AND seller_id = #{sellerId}
+    </update>
+
+</mapper>

@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.coding24h.mall_spring.mapper.SellerCertificationMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="BaseResultMap" type="com.coding24h.mall_spring.entity.SellerCertification">
+        <id column="certification_id" property="certificationId" jdbcType="INTEGER"/>
+        <result column="user_id" property="userId" jdbcType="INTEGER"/>
+        <result column="business_license" property="businessLicense" jdbcType="VARCHAR"/>
+        <result column="business_name" property="businessName" jdbcType="VARCHAR"/>
+        <result column="business_type" property="businessType" jdbcType="VARCHAR"/>
+        <result column="contact_phone" property="contactPhone" jdbcType="VARCHAR"/>
+        <result column="contact_email" property="contactEmail" jdbcType="VARCHAR"/>
+        <result column="business_address" property="businessAddress" jdbcType="VARCHAR"/>
+        <result column="business_description" property="businessDescription" jdbcType="LONGVARCHAR"/>
+        <result column="status" property="status" jdbcType="TINYINT"/>
+        <result column="reviewed_by" property="reviewedBy" jdbcType="INTEGER"/>
+        <result column="reviewed_at" property="reviewedAt" jdbcType="TIMESTAMP"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+        <result column="reject_reason" property="rejectReason" jdbcType="VARCHAR"/>
+        <result column="username" property="username" jdbcType="VARCHAR"/>
+        <result column="email" property="email" jdbcType="VARCHAR"/>
+    </resultMap>
+
+    <!-- 基础字段 -->
+    <sql id="Base_Column_List">
+        sc.certification_id, sc.user_id, sc.business_license, sc.business_name, sc.business_type,
+        sc.contact_phone, sc.contact_email, sc.business_address, sc.business_description,
+        sc.status, sc.reviewed_by, sc.reviewed_at, sc.created_at, sc.reject_reason
+    </sql>
+
+    <!-- 关联用户信息的字段 -->
+    <sql id="Join_Column_List">
+        <include refid="Base_Column_List"/>, u.username, u.email
+    </sql>
+
+    <!-- 插入认证申请 -->
+    <insert id="insert" parameterType="com.coding24h.mall_spring.entity.SellerCertification"
+            useGeneratedKeys="true" keyProperty="certificationId">
+        INSERT INTO seller_certifications (
+            user_id, business_license, business_name, business_type,
+            contact_phone, contact_email, business_address, business_description,
+            status, created_at
+        ) VALUES (
+                     #{userId}, #{businessLicense}, #{businessName}, #{businessType},
+                     #{contactPhone}, #{contactEmail}, #{businessAddress}, #{businessDescription},
+                     #{status}, #{createdAt}
+                 )
+    </insert>
+
+    <!-- 根据用户ID查询认证记录 -->
+    <select id="selectByUserId" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM seller_certifications sc
+        WHERE sc.user_id = #{userId}
+        ORDER BY sc.created_at DESC
+        LIMIT 1
+    </select>
+
+    <!-- 根据ID查询认证记录 -->
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Join_Column_List"/>
+        FROM seller_certifications sc
+        LEFT JOIN users u ON sc.user_id = u.user_id
+        WHERE sc.certification_id = #{certificationId}
+    </select>
+
+    <!-- 更新认证状态 -->
+    <update id="updateStatus">
+        UPDATE seller_certifications
+        SET status = #{status},
+        reviewed_by = #{reviewedBy},
+        reviewed_at = NOW()
+        <if test="rejectReason != null and rejectReason != ''">
+            , reject_reason = #{rejectReason}
+        </if>
+        WHERE certification_id = #{certificationId}
+    </update>
+
+    <!-- 分页查询认证记录列表 -->
+    <select id="selectList" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Join_Column_List"/>
+        FROM seller_certifications sc
+        LEFT JOIN users u ON sc.user_id = u.user_id
+        <where>
+            <if test="status != null">
+                AND sc.status = #{status}
+            </if>
+        </where>
+        ORDER BY sc.created_at DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <!-- 统计总数 -->
+    <select id="countTotal" resultType="int">
+        SELECT COUNT(*)
+        FROM seller_certifications sc
+        <where>
+            <if test="status != null">
+                AND sc.status = #{status}
+            </if>
+        </where>
+    </select>
+
+    <!-- 检查用户是否已有认证记录 -->
+    <select id="existsByUserId" resultType="boolean">
+        SELECT COUNT(*) > 0
+        FROM seller_certifications
+        WHERE user_id = #{userId}
+    </select>
+
+</mapper>

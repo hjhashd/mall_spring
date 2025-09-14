@@ -67,6 +67,7 @@ public class WebSecurityConfig {
                         .requestMatchers("/login", "/toLogin").permitAll()
                         .requestMatchers("/api/**").permitAll()
                         .requestMatchers("/ws/**").permitAll() // 确保放行
+                        .requestMatchers("/ws-chat/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 // 添加这个配置确保SecurityContext在请求间传递

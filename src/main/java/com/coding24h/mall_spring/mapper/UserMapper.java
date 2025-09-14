@@ -268,4 +268,33 @@ public interface UserMapper {
     @Update("UPDATE users SET follower_count = follower_count + 1 WHERE user_id = #{userId}")
     void incrementFollowerCount(@Param("userId") Integer userId);
 
+
+    // =================================================================
+    // 【补充】以下是根据UserService调用自动补充的3个方法
+    // =================================================================
+
+    /**
+     * 更新用户的密码安全等级
+     * @param userId 用户ID
+     * @param passwordLevel 密码等级
+     */
+    @Update("UPDATE users SET password_level = #{passwordLevel} WHERE user_id = #{userId}")
+    void updatePasswordLevel(@Param("userId") Long userId, @Param("passwordLevel") int passwordLevel);
+
+    /**
+     * 获取用户的账户设置信息 (包括 email, phone, avatar_path, password_level)
+     * @param userId 用户ID
+     * @return 包含账户信息的User对象
+     */
+    @Select("SELECT user_id, email, phone, avatar_path, password_level FROM users WHERE user_id = #{userId}")
+    User getUserAccountInfo(@Param("userId") int userId);
+
+    /**
+     * 更新用户的头像路径
+     * @param userId 用户ID
+     * @param avatarPath 新的头像文件路径
+     */
+    @Update("UPDATE users SET avatar_path = #{avatarPath} WHERE user_id = #{userId}")
+    void updateUserAvatarPath(@Param("userId") Long userId, @Param("avatarPath") String avatarPath);
+
 }

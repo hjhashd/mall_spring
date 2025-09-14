@@ -9,7 +9,6 @@ import com.coding24h.mall_spring.entity.vo.PageResult;
 import com.coding24h.mall_spring.entity.vo.ProductDetailVO;
 import com.coding24h.mall_spring.entity.vo.ProductVO;
 import com.coding24h.mall_spring.mapper.*;
-import com.coding24h.mall_spring.mapper.recommend.RecommendMapper;
 import com.coding24h.mall_spring.service.impl.FileStorageService;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -19,14 +18,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.math.BigDecimal;
-import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * 核心商品服务
+ * 负责商品的常规CURD、搜索、分类管理、收藏等功能
+ */
 @Service
-public class ProductService{
+public class ProductService {
 
     @Autowired
     private ProductMapper productMapper;
@@ -39,14 +43,12 @@ public class ProductService{
 
     @Autowired
     private ContentModerationMapper contentModerationMapper;
+
     @Autowired
     private ProductImageMapper productImageMapper;
 
     @Autowired
     private ProductFavoriteMapper productFavoriteMapper;
-
-    @Autowired
-    private RecommendMapper recMapper;
 
 
     @Transactional
@@ -106,102 +108,6 @@ public class ProductService{
         return new ProductSearchResponse(total, items);
     }
 
-    // 新增：获取推荐商品
-    public ProductSearchResponse getRecommendedProducts(ProductQueryDTO query, Long currentUserId) {
-        // 设置分页参数
-        int page = query.getPage() != null && query.getPage() > 0 ? query.getPage() : 1;
-        int pageSize = query.getPageSize() != null && query.getPageSize() > 0 ? query.getPageSize() : 12;
-        int offset = (page - 1) * pageSize;
-
-        // 1. 获取用户感兴趣的商品分类ID列表
-        List<Integer> interestedCategoryIds = recMapper.findUserInterestedCategories(currentUserId);  //猜你喜欢
-        if (interestedCategoryIds.isEmpty()) {
-            // 如果用户没有明确的兴趣，可以返回热门商品或最新商品作为兜底
-            query.setSort("popular");
-            return searchProducts(query, currentUserId);
-        }
-
-        // 2. 查询推荐商品
-        List<ProductVO> items = recMapper.findRecommendedProducts(currentUserId, interestedCategoryIds, offset, pageSize);
-
-        // 3. 查询推荐商品总数
-        long total = recMapper.countRecommendedProducts(currentUserId, interestedCategoryIds);
-
-        return new ProductSearchResponse(total, items);
-    }
-
-
-    /**
-     * "看了又看" (相似商品推荐)
-     * 优先使用基于协同过滤的 "共同购买" 推荐。
-     * 如果协同过滤结果为空，则降级为基于内容的 "同分类热门" 推荐。
-     *
-     * @param productId     当前商品ID
-     * @param currentUserId 当前用户ID（用于排除用户自己的商品或已购买的）
-     * @param page          页码
-     * @param size          每页数量
-     * @return 推荐商品的分页结果
-     */
-    public ProductSearchResponse findSimilarProducts(Integer productId, Long currentUserId, int page, int size) {
-        int offset = (page - 1) * size;
-
-        // --- 进阶版：基于协同过滤 (Item-Based Collaborative Filtering) ---
-        // 查找与 productId 一起被购买过的其他商品
-        List<ProductVO> collaborativeItems = recMapper.findProductsFrequentlyBoughtTogether(productId, currentUserId, size);
-
-        // 如果协同过滤找到了足够的结果，直接返回
-        if (!collaborativeItems.isEmpty()) {
-            // 注意：这里的 total 只是当前批次的结果数，因为协同过滤通常不进行严格分页
-            long total = collaborativeItems.size();
-            return new ProductSearchResponse(total, collaborativeItems);
-        }
-
-        // --- 简单版：基于内容推荐 (作为降级策略) ---
-        // 1. 获取当前商品的分类ID
-        Product currentProduct = productMapper.selectById(productId);
-        if (currentProduct == null) {
-            // 如果商品不存在，返回空结果
-            return new ProductSearchResponse(0L, Collections.emptyList());
-        }
-        Integer categoryId = currentProduct.getCategoryId();
-
-        // 2. 查找该分类下的其他热门商品 (按浏览量和创建时间排序)
-        List<ProductVO> contentBasedItems = recMapper.findSimilarProductsByCategory(categoryId, productId, currentUserId, offset, size);
-        long total = recMapper.countSimilarProductsByCategory(categoryId, productId, currentUserId);
-
-        return new ProductSearchResponse(total, contentBasedItems);
-    }
-
-    /**
-     * 新增：获取购物车配套推荐商品
-     * 核心思路：找出与购物车内商品最常被一起购买的其他商品。
-     * @param query         分页和排序参数
-     * @param currentUserId 当前用户ID
-     * @return 推荐商品的分页结果
-     */
-    public ProductSearchResponse getCartRecommendations(ProductQueryDTO query, Long currentUserId) {
-        // 1. 从 recMapper 获取当前用户购物车中的所有商品ID
-        List<Integer> cartProductIds = recMapper.findProductIdsInCart(currentUserId);
-
-        // 如果购物车为空，则无需推荐，直接返回空列表
-        if (cartProductIds == null || cartProductIds.isEmpty()) {
-            return new ProductSearchResponse(0L, Collections.emptyList());
-        }
-
-        // 2. 设置分页参数 (购物车推荐通常数量较少)
-        int page = query.getPage() != null && query.getPage() > 0 ? query.getPage() : 1;
-        int pageSize = query.getPageSize() != null && query.getPageSize() > 0 ? query.getPageSize() : 6;
-        int offset = (page - 1) * pageSize;
-
-        // 3. 调用 recMapper 查询与购物车商品搭配的推荐品
-        List<ProductVO> items = recMapper.findComplementaryProductsForCart(currentUserId, cartProductIds, offset, pageSize);
-
-        // 4. 调用 recMapper 计算推荐品的总数，用于分页
-        long total = recMapper.countComplementaryProductsForCart(currentUserId, cartProductIds);
-
-        return new ProductSearchResponse(total, items);
-    }
-
     /**
      * 获取所有激活状态的分类列表
      * 该方法从数据库中查询并返回所有状态为激活的分类信息
@@ -240,6 +146,7 @@ public class ProductService{
 
     /**
      * 新增：创建一个新的分类
+     *
      * @param category 要创建的分类对象
      * @return 创建后的分类对象（包含ID）
      */
@@ -254,6 +161,7 @@ public class ProductService{
 
     /**
      * 新增：更新一个分类
+     *
      * @param category 要更新的分类对象
      * @return 更新后的行数
      */
@@ -266,6 +174,7 @@ public class ProductService{
 
     /**
      * 新增：删除一个分类及其所有子分类
+     *
      * @param categoryId 要删除的分类ID
      */
     @Transactional // 添加事务支持，确保操作的原子性
@@ -327,7 +236,6 @@ public class ProductService{
         productMapper.insertProduct(product);
         return product.getProductId(); // 返回新建商品ID
     }
-
 
 
     @Transactional
@@ -441,7 +349,6 @@ public class ProductService{
         productImageMapper.deleteByProductId(productId);
         productMapper.deleteById(productId);
     }
-
 
 
     public ApiResponse<PageResult<ProductForSellerDTO>> getSellerProducts(Long sellerId, int page, int size) {

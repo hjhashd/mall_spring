@@ -4,6 +4,7 @@ import com.coding24h.mall_spring.dto.*;
 import com.coding24h.mall_spring.entity.User;
 import com.coding24h.mall_spring.jwt.JwtTokenUtil;
 import com.coding24h.mall_spring.service.UserService;
+import com.coding24h.mall_spring.util.PasswordValidator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,8 +21,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -51,6 +50,7 @@ public class AuthController {
                     )
             );
 
+
             final UserDetails userDetails = (UserDetails) authentication.getPrincipal();
 
             // 获取完整用户信息
@@ -72,6 +72,10 @@ public class AuthController {
                     .map(GrantedAuthority::getAuthority)
                     .collect(Collectors.toList());
             userDetail.setRoles(roles);
+
+            PasswordValidator.ValidationResult result = PasswordValidator.checkStrength(loginRequest.getPassword());
+            int strengthLevel = result.getStrengthLevel();
+            userService.updateUserPasswordLevel(user.getUserId(), strengthLevel);
 
             return ResponseEntity.ok(new JwtResponse(token, userDetail));
 

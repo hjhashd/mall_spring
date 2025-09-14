@@ -3,23 +3,33 @@ package com.coding24h.mall_spring.service;
 import com.coding24h.mall_spring.dto.FollowerInfoDTO;
 import com.coding24h.mall_spring.dto.PageDTO;
 import com.coding24h.mall_spring.dto.UserDTO;
-import com.coding24h.mall_spring.entity.User;
-import com.coding24h.mall_spring.entity.Role;
-import com.coding24h.mall_spring.entity.event.UserFollowedEvent;
-import com.coding24h.mall_spring.entity.vo.UserBasicInfoVO;
-import com.coding24h.mall_spring.mapper.UserMapper;
-import com.coding24h.mall_spring.mapper.RoleMapper;
 import com.coding24h.mall_spring.dto.UserRoleInfoDTO;
+import com.coding24h.mall_spring.entity.Role;
+import com.coding24h.mall_spring.entity.User;
+import com.coding24h.mall_spring.entity.event.UserFollowedEvent;
+import com.coding24h.mall_spring.entity.myEnum.PasswordSecurityLevel;
+import com.coding24h.mall_spring.entity.vo.UserAccountSettingsVO;
+import com.coding24h.mall_spring.entity.vo.UserBasicInfoVO;
+import com.coding24h.mall_spring.mapper.RoleMapper;
+import com.coding24h.mall_spring.mapper.UserMapper;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -36,6 +46,12 @@ public class UserService {
 
     @Autowired
     private ApplicationEventPublisher eventPublisher;
+
+    @Value("${file.base-url}")
+    private String BASE_URL;
+    @Value("${file.upload-dir}")
+    private String UPLOAD_DIR;
+    private static final String FILE_TYPE = "/avatar/";
 
     public List<User> findRoleByUsername(String username) {
         return userMapper.findRoleByUsername(username);
@@ -248,9 +264,10 @@ public class UserService {
 
     /**
      * 根据卖家ID获取其关注者分页数据
+     *
      * @param sellerId 卖家ID
-     * @param page      当前页码
-     * @param pageSize  每页数量
+     * @param page     当前页码
+     * @param pageSize 每页数量
      * @return 关注者分页DTO
      */
     public PageDTO<FollowerInfoDTO> getFollowersPage(Integer sellerId, int page, int pageSize) {
@@ -265,6 +282,7 @@ public class UserService {
 
     /**
      * 添加关注关系，并更新双方的关注数和粉丝数
+     *
      * @param followerId 关注者ID
      * @param followedId 被关注者ID
      */
@@ -292,6 +310,7 @@ public class UserService {
 
     /**
      * 移除关注关系，并更新双方的关注数和粉丝数
+     *
      * @param followerId 关注者ID
      * @param followedId 被关注者ID
      */
@@ -310,6 +329,7 @@ public class UserService {
 
     /**
      * [新增] 检查关注状态
+     *
      * @param followerId 关注者ID
      * @param followedId 被关注者ID
      * @return 是否已关注
@@ -319,5 +339,61 @@ public class UserService {
             return false;
         }
         return userMapper.checkFollowExists(followerId, followedId) > 0;
+    }
+
+    // 更新用户的密码等级
+    public void updateUserPasswordLevel(Long userId, int passwordLevel) {
+        userMapper.updatePasswordLevel(userId, passwordLevel);
+    }
+
+    // 获取用户账号设置信息
+    public UserAccountSettingsVO getUserAccountInfo(int id) {
+        UserAccountSettingsVO vo = new UserAccountSettingsVO();
+        User user = userMapper.getUserAccountInfo(id);
+
+        BeanUtils.copyProperties(user, vo);
+        String level = PasswordSecurityLevel.getDescriptionByLevel(user.getPasswordLevel());
+        vo.setPasswordLevel(level);
+        return vo;
+    }
+
+    public String updateUserAvatarPath(Long currentUserId, MultipartFile file) {
+        if (file.isEmpty()) {
+            return null;
+        }
+
+        User user = userMapper.getUserAccountInfo(currentUserId.intValue());
+        String oldPath = user.getAvatarPath();
+        String deleteOldPath = UPLOAD_DIR + oldPath.substring(oldPath.indexOf(FILE_TYPE));
+
+        try {
+            // 确保存在上传目录
+            File uploadDir = new File(UPLOAD_DIR);
+            if (!uploadDir.exists()) {
+                uploadDir.mkdirs();
+            }
+
+            // 生成唯一文件名以避免冲突
+            String fileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
+            Path filePath = Paths.get(UPLOAD_DIR + FILE_TYPE + fileName);
+
+            // 保存文件
+            Files.write(filePath, file.getBytes());
+            // 保存到数据库
+            String avatarPath = BASE_URL + FILE_TYPE + fileName;
+            try {
+                userMapper.updateUserAvatarPath(currentUserId, avatarPath);
+                System.out.println("删除的旧文件路径：" + deleteOldPath);
+                Files.deleteIfExists(Path.of(deleteOldPath));
+            } catch (Exception e) {
+                e.printStackTrace();
+                Files.deleteIfExists(filePath);
+            }
+            return avatarPath;
+        } catch (IOException e) {
+            // TODO 建议记录日志
+            e.printStackTrace();
+            return null;
+        }
     }
 }

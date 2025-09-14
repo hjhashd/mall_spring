@@ -2,14 +2,14 @@ package com.coding24h.mall_spring.controller;
 
 import com.coding24h.mall_spring.dto.ApiResponse;
 import com.coding24h.mall_spring.entity.CustomUserDetails;
+import com.coding24h.mall_spring.entity.vo.UserAccountSettingsVO;
 import com.coding24h.mall_spring.entity.vo.UserBasicInfoVO;
 import com.coding24h.mall_spring.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 
@@ -19,6 +19,19 @@ public class UserController {
 
     @Autowired
     private UserService userService;
+
+    // 更新用户头像
+    @PostMapping("/update-avatar")
+    public ApiResponse<String> updateUserAvatar(@RequestParam("avatar") MultipartFile file) {
+        Long currentUserId = getCurrentUserId();
+        if (currentUserId == null) {
+            return new ApiResponse<>(false, "请先登录");
+        }
+
+        // 更新用户在数据库中的头像路径（伪代码）
+        String url = userService.updateUserAvatarPath(currentUserId, file);
+        return new ApiResponse<>(true, url);
+    }
 
     // 获取用户余额
     @GetMapping("/balance")
@@ -46,6 +59,7 @@ public class UserController {
         return null;
     }
 
+    // 获取基本信息
     @GetMapping("/basic-info")
     public ApiResponse<UserBasicInfoVO> getUserBasicInfo() {
         Long userId = getCurrentUserId();
@@ -54,5 +68,17 @@ public class UserController {
         }
         UserBasicInfoVO userBasicInfoVO = userService.getUserBasicInfo(userId.intValue());
         return new ApiResponse<>(true, "获取成功", userBasicInfoVO);
+    }
+
+    // 获取用户账户设置信息
+    @GetMapping("/account-info")
+    public ApiResponse<UserAccountSettingsVO> getUserAccountInfo() {
+        Long userId = getCurrentUserId();
+        if (userId == null) {
+            return new ApiResponse<>(false, "请先登录");
+        }
+
+        UserAccountSettingsVO userAccountInfo = userService.getUserAccountInfo(userId.intValue());
+        return new ApiResponse<>(true, "获取成功", userAccountInfo);
     }
 }

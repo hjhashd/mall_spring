@@ -8,12 +8,10 @@ import com.coding24h.mall_spring.entity.Product;
 import com.coding24h.mall_spring.entity.ProductImage;
 import com.coding24h.mall_spring.entity.vo.ProductDetailVO;
 import com.coding24h.mall_spring.entity.vo.ProductVO;
-import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 @Mapper
@@ -120,5 +118,7 @@ public interface ProductMapper {
 
     ProductDetailDTO selectProductDetailById(@Param("productId") Integer productId,
                                              @Param("userId") Integer userId);
+
+    long countProducts(ProductQueryDTO query);
 
 }

@@ -2,21 +2,21 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.coding24h.mall_spring.mapper.recommend.RecommendMapper">
 
-    <!-- 新增：查询用户感兴趣的商品分类 -->
+    <!-- 查询用户感兴趣的商品分类 -->
     <select id="findUserInterestedCategories" resultType="java.lang.Integer">
         SELECT DISTINCT p.category_id
         FROM products p
         WHERE p.product_id IN (
--- 收藏过的商品
+            -- 收藏过的商品
             SELECT product_id FROM product_favorites WHERE user_id = #{userId}
             UNION
--- 购买过的商品
+            -- 购买过的商品
             SELECT oi.product_id FROM order_items oi JOIN orders o ON oi.order_id = o.order_id WHERE o.user_id = #{userId}
             UNION
--- 给出好评的商品 (rating >= 4)
+            -- 给出好评的商品 (rating >= 4)
             SELECT r.product_id FROM reviews r WHERE r.user_id = #{userId} AND r.rating >= 4
             UNION
--- 加入购物车的商品
+            -- 加入购物车的商品
             SELECT product_id FROM cart WHERE user_id = #{userId}
         )
         GROUP BY p.category_id
@@ -24,8 +24,8 @@
             LIMIT 5 -- 限制为最感兴趣的5个分类
     </select>
 
-    <!-- 新增：查询推荐商品列表 -->
-    <select id="findRecommendedProducts" resultType="com.coding24h.mall_spring.entity.vo.ProductVO">
+    <!-- 随机查询一个推荐商品 -->
+    <select id="findRecommendedProduct" resultType="com.coding24h.mall_spring.entity.vo.ProductVO">
         SELECT
         p.product_id AS id,
         p.title,
@@ -56,41 +56,17 @@
         SELECT product_id FROM cart WHERE user_id = #{userId}
         )
         AND p.seller_id != #{userId} -- 排除用户自己的商品
-        ORDER BY 
-        p.view_count DESC, -- 按浏览量降序（热门商品优先）
-        p.favorite_count DESC, -- 按收藏量降序
-        p.created_at DESC -- 按创建时间降序
-        LIMIT #{offset}, #{pageSize}
+        ORDER BY RAND()
+        LIMIT 1
     </select>
 
-    <!-- 新增：计算推荐商品的总数 -->
-    <select id="countRecommendedProducts" resultType="long">
-        SELECT COUNT(p.product_id)
-        FROM products p
-        WHERE p.status = 1
-        AND p.stock > 0 -- 只统计有库存的商品
-        AND p.category_id IN
-        <foreach item="item" index="index" collection="categoryIds" open="(" separator="," close=")">
-            #{item}
-        </foreach>
-        AND p.product_id NOT IN (
-        SELECT product_id FROM product_favorites WHERE user_id = #{userId}
-        UNION
-        SELECT oi.product_id FROM order_items oi JOIN orders o ON oi.order_id = o.order_id WHERE o.user_id = #{userId}
-        UNION
-        SELECT product_id FROM cart WHERE user_id = #{userId}
-        )
-        AND p.seller_id != #{userId}
-    </select>
-
-
-    <select id="findProductsFrequentlyBoughtTogether" resultType="com.coding24h.mall_spring.entity.vo.ProductVO">
+    <!-- 随机查找一个经常一起购买的商品 -->
+    <select id="findProductFrequentlyBoughtTogether" resultType="com.coding24h.mall_spring.entity.vo.ProductVO">
         SELECT
         p.product_id AS id,
         p.title,
         p.price,
-        (SELECT image_url FROM product_images WHERE product_id = p.product_id AND is_main = 1 LIMIT 1) AS image,
-        COUNT(p.product_id) AS co_occurrence_count -- 共同出现次数
+        (SELECT image_url FROM product_images WHERE product_id = p.product_id AND is_main = 1 LIMIT 1) AS image
         FROM order_items oi1
         JOIN order_items oi2 ON oi1.order_id = oi2.order_id AND oi1.product_id != oi2.product_id
         JOIN products p ON oi2.product_id = p.product_id
@@ -103,13 +79,12 @@
         </if>
         GROUP BY
         p.product_id, p.title, p.price
-        ORDER BY
-        co_occurrence_count DESC, -- 按共同购买次数降序
-        p.view_count DESC         -- 次要排序按浏览量
-        LIMIT #{limit}
+        ORDER BY RAND()
+        LIMIT 1
     </select>
 
-    <select id="findSimilarProductsByCategory" resultType="com.coding24h.mall_spring.entity.vo.ProductVO">
+    <!-- 根据分类随机查找一个相似商品 -->
+    <select id="findSimilarProductByCategory" resultType="com.coding24h.mall_spring.entity.vo.ProductVO">
         SELECT
         p.product_id AS id,
         p.title,
@@ -124,79 +99,27 @@
         <if test="currentUserId != null">
             AND p.seller_id != #{currentUserId} -- 排除用户自己的商品
         </if>
-        ORDER BY
-        p.view_count DESC,   -- 按浏览量降序
-        p.created_at DESC    -- 按创建时间降序
-        LIMIT #{offset}, #{size}
+        ORDER BY RAND()
+        LIMIT 1
     </select>
 
-    <select id="countSimilarProductsByCategory" resultType="long">
-        SELECT COUNT(*)
-        FROM products p
-        WHERE
-        p.category_id = #{categoryId}
-        AND p.product_id != #{originalProductId}
-        AND p.status = 1
-        AND p.stock > 0 -- 只统计有库存的商品
-        <if test="currentUserId != null">
-            AND p.seller_id != #{currentUserId}
-        </if>
-    </select>
-
-    <!-- ... (保留 "猜你喜欢" 和 "看了又看" 的查询) ... -->
-
     <!-- ======================================================== -->
-    <!--  "购物车配套推荐" - 新增SQL                              -->
+    <!--  "购物车配套推荐" - SQL                              -->
     <!-- ======================================================== -->
 
-    <!-- 1. findProductIdsInCart: 查询指定用户购物车中的所有商品ID -->
     <select id="findProductIdsInCart" resultType="java.lang.Integer">
         SELECT product_id
         FROM cart
         WHERE user_id = #{userId}
     </select>
 
-    <!-- 2. findComplementaryProductsForCart: 查找与购物车商品最常搭配的商品 -->
-    <select id="findComplementaryProductsForCart" resultType="com.coding24h.mall_spring.entity.vo.ProductVO">
+    <!-- 随机查找一个与购物车商品搭配购买的商品 -->
+    <select id="findComplementaryProductForCart" resultType="com.coding24h.mall_spring.entity.vo.ProductVO">
         SELECT
         p.product_id AS id,
         p.title,
         p.price,
-        (SELECT image_url FROM product_images WHERE product_id = p.product_id AND is_main = 1 LIMIT 1) AS image,
-        COUNT(p.product_id) AS co_occurrence_count -- 核心：计算共同购买次数
-        FROM order_items oi
-        JOIN products p ON oi.product_id = p.product_id
-        WHERE
-        -- 核心逻辑：查找包含了购物车商品的那些订单
-        oi.order_id IN (
-        SELECT DISTINCT order_id
-        FROM order_items
-        WHERE product_id IN
-        <foreach item="item" collection="cartProductIds" open="(" separator="," close=")">
-            #{item}
-        </foreach>
-        )
-        -- 排除掉购物车里已有的商品
-        AND oi.product_id NOT IN
-        <foreach item="item" collection="cartProductIds" open="(" separator="," close=")">
-            #{item}
-        </foreach>
-        AND p.status = 1 -- 只推荐上架商品
-        AND p.stock > 0 -- 只推荐有库存的商品
-        <if test="currentUserId != null">
-            AND p.seller_id != #{currentUserId} -- 排除用户自己的商品
-        </if>
-        GROUP BY
-        p.product_id, p.title, p.price
-        ORDER BY
-        co_occurrence_count DESC, -- 按共同购买次数排序
-        p.favorite_count DESC     -- 按收藏量作为次要排序
-        LIMIT #{offset}, #{pageSize}
-    </select>
-
-    <!-- 3. countComplementaryProductsForCart: 计算可推荐的搭配商品总数 -->
-    <select id="countComplementaryProductsForCart" resultType="long">
-        SELECT COUNT(DISTINCT oi.product_id)
+        (SELECT image_url FROM product_images WHERE product_id = p.product_id AND is_main = 1 LIMIT 1) AS image
         FROM order_items oi
         JOIN products p ON oi.product_id = p.product_id
         WHERE
@@ -213,10 +136,90 @@
             #{item}
         </foreach>
         AND p.status = 1
-        AND p.stock > 0 -- 只统计有库存的商品
+        AND p.stock > 0
         <if test="currentUserId != null">
             AND p.seller_id != #{currentUserId}
         </if>
+        GROUP BY
+        p.product_id, p.title, p.price
+        ORDER BY RAND()
+        LIMIT 1
+    </select>
+
+    <!-- 根据多个分类，随机查找一个相似商品 -->
+    <select id="findSimilarProductByCategories" resultType="com.coding24h.mall_spring.entity.vo.ProductVO">
+        SELECT
+        p.product_id AS id,
+        p.title,
+        p.price,
+        (SELECT image_url FROM product_images WHERE product_id = p.product_id AND is_main = 1 LIMIT 1) AS image
+        FROM products p
+        WHERE
+        p.status = 1
+        AND p.stock > 0
+        AND p.category_id IN
+        <foreach item="item" collection="categoryIds" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        AND p.product_id NOT IN
+        <foreach item="item" collection="excludeProductIds" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        <if test="currentUserId != null">
+            AND p.seller_id != #{currentUserId}
+        </if>
+        ORDER BY RAND()
+        LIMIT 1
+    </select>
+
+    <!-- ======================================================== -->
+    <!--  兜底策略 - SQL                                          -->
+    <!-- ======================================================== -->
+
+    <!-- 随机查询任何一个可用的商品 -->
+    <select id="findAnyAvailableProduct" resultType="com.coding24h.mall_spring.entity.vo.ProductVO">
+        SELECT
+        p.product_id AS id,
+        p.title,
+        p.price,
+        p.original_price AS originalPrice,
+        p.location,
+        p.created_at AS createdAt,
+        (SELECT image_url FROM product_images WHERE product_id = p.product_id AND is_main = 1 LIMIT 1) AS image,
+        CASE
+        WHEN #{currentUserId} IS NOT NULL
+        THEN EXISTS (
+        SELECT 1 FROM product_favorites
+        WHERE product_id = p.product_id AND user_id = #{currentUserId}
+        )
+        ELSE false
+        END AS isFavorite
+        FROM
+        products p
+        WHERE
+        p.status = 1
+        AND p.stock > 0
+        <if test="currentUserId != null">
+            AND p.seller_id != #{currentUserId}
+        </if>
+        <if test="excludeProductIds != null and !excludeProductIds.isEmpty()">
+            AND p.product_id NOT IN
+            <foreach item="item" collection="excludeProductIds" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        ORDER BY RAND()
+        LIMIT 1
+    </select>
+
+    <!-- 根据商品ID列表查询它们所属的、不重复的分类ID列表 -->
+    <select id="findCategoryIdsByProductIds" resultType="java.lang.Integer">
+        SELECT DISTINCT category_id
+        FROM products
+        WHERE product_id IN
+        <foreach item="item" collection="list" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        AND category_id IS NOT NULL
     </select>
 </mapper>
-

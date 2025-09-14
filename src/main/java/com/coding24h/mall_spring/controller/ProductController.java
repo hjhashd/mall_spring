@@ -8,6 +8,7 @@ import com.coding24h.mall_spring.entity.vo.ProductDetailVO;
 import com.coding24h.mall_spring.entity.vo.ProductVO;
 import com.coding24h.mall_spring.jwt.JwtTokenUtil;
 import com.coding24h.mall_spring.service.ProductService;
+import com.coding24h.mall_spring.service.RecommendationService;
 import com.github.pagehelper.PageInfo;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +24,9 @@ public class ProductController {
 
     @Autowired
     private ProductService productService;
+
+    @Autowired
+    private RecommendationService recService;
 
     @Autowired
     private JwtTokenUtil jwtTokenUtil;
@@ -42,18 +46,22 @@ public class ProductController {
         }
     }
 
-    // 新增：推荐商品接口
+    /**
+     * "猜你喜欢" - 获取推荐商品
+     * @return 推荐商品列表（包含0或1个商品）
+     */
     @GetMapping("/recommendations")
-    public ApiResponse<ProductSearchResponse> getRecommendations(@ModelAttribute ProductQueryDTO query) {
+    public ApiResponse<List<ProductVO>> getRecommendations() {
         Long currentUserId = getCurrentUserId();
         if (currentUserId == null) {
             return new ApiResponse<>(false, "请先登录后才能使用推荐功能", null);
         }
 
         try {
-            ProductSearchResponse result = productService.getRecommendedProducts(query, currentUserId);
+            List<ProductVO> result = recService.getRecommendedProduct(currentUserId);
             return new ApiResponse<>(true, "获取推荐商品成功", result);
         } catch (Exception e) {
+            // 建议记录日志 e.printStackTrace(); or log.error(...)
             return new ApiResponse<>(false, "获取推荐商品失败: " + e.getMessage(), null);
         }
     }
@@ -61,19 +69,13 @@ public class ProductController {
     /**
      * "看了又看" - 获取相似商品推荐
      * @param productId 当前正在浏览的商品ID
-     * @param page      页码
-     * @param size      每页数量
-     * @return 相似商品列表
+     * @return 相似商品列表（包含0或1个商品）
      */
     @GetMapping("/{productId}/similar")
-    public ApiResponse<ProductSearchResponse> findSimilarProducts(
-            @PathVariable Integer productId,
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "5") int size // 相似推荐通常数量较少
-    ) {
-        Long currentUserId = getCurrentUserId(); // 获取用户ID以优化推荐（例如排除已购买）
+    public ApiResponse<List<ProductVO>> findSimilarProduct(@PathVariable Integer productId) {
+        Long currentUserId = getCurrentUserId(); // 获取用户ID以优化推荐
         try {
-            ProductSearchResponse result = productService.findSimilarProducts(productId, currentUserId, page, size);
+            List<ProductVO> result = recService.findSimilarProduct(productId, currentUserId);
             return new ApiResponse<>(true, "获取相似商品成功", result);
         } catch (Exception e) {
             return new ApiResponse<>(false, "获取相似商品失败: " + e.getMessage());
@@ -82,18 +84,17 @@ public class ProductController {
 
     /**
      * "购物车配套推荐" - 根据购物车内容获取推荐商品
-     * @param query 分页参数
-     * @return 推荐的搭配商品列表
+     * @return 推荐的搭配商品列表（包含0或1个商品）
      */
     @GetMapping("/cart/recommendations")
-    public ApiResponse<ProductSearchResponse> getCartRecommendations(@ModelAttribute ProductQueryDTO query) {
+    public ApiResponse<List<ProductVO>> getCartRecommendations() {
         Long currentUserId = getCurrentUserId();
         if (currentUserId == null) {
             return new ApiResponse<>(false, "请先登录", null);
         }
 
         try {
-            ProductSearchResponse result = productService.getCartRecommendations(query, currentUserId);
+            List<ProductVO> result = recService.getCartRecommendation(currentUserId);
             return new ApiResponse<>(true, "获取购物车推荐成功", result);
         } catch (Exception e) {
             return new ApiResponse<>(false, "获取购物车推荐失败: " + e.getMessage(), null);

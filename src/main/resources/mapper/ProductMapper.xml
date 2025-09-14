@@ -122,7 +122,6 @@
     </select>
 
     <!-- 商品搜索 -->
-    <!-- 商品搜索 -->
     <select id="searchProducts" resultType="com.coding24h.mall_spring.entity.vo.ProductVO">
         SELECT
         p.product_id AS id,
@@ -223,6 +222,8 @@
         </choose>
         LIMIT #{pageSize} OFFSET #{offset}
     </select>
+
+
     <!-- 商品计数 -->
     <select id="countProducts" resultType="long">
         SELECT COUNT(*)
@@ -258,7 +259,7 @@
     <select id="findAllActiveCategories" resultType="com.coding24h.mall_spring.entity.Category">
         SELECT category_id, category_name
         FROM product_categories
-        WHERE is_show = 1
+        WHERE is_show = 1 AND parent_id = 0
         ORDER BY sort_order DESC, category_id ASC
     </select>
 
@@ -321,7 +322,7 @@
         SELECT image_url FROM product_images
         WHERE product_id = #{productId}
         ORDER BY is_main DESC, sort_order ASC
-        LIMIT 1
+            LIMIT 1
     </select>
 
     <!-- 根据商品ID查询图片列表 -->
@@ -432,7 +433,7 @@
                      FROM product_images pi
                      WHERE pi.product_id = p.product_id
                      ORDER BY pi.is_main DESC, pi.sort_order ASC
-                     LIMIT 1),
+                    LIMIT 1),
                     'http://localhost:8080/uploads/products/example.png'
             ) AS image,
             p.title AS name,
@@ -449,8 +450,6 @@
         FROM products p
         WHERE p.seller_id = #{sellerId}
         ORDER BY p.created_at DESC
-        LIMIT #{offset}, #{pageSize}
+            LIMIT #{offset}, #{pageSize}
     </select>
-
-
 </mapper>

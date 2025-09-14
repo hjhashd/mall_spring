@@ -20,7 +20,16 @@ public class User {
     private LocalDateTime lastUpdated;
     private String role;
     private List<String> roles;
+    private Integer passwordLevel; // 对应 password_level 字段
 
+    // Getter & Setter
+    public Integer getPasswordLevel() {
+        return passwordLevel;
+    }
+
+    public void setPasswordLevel(Integer passwordLevel) {
+        this.passwordLevel = passwordLevel;
+    }
     public String getAvatarPath() {
         return avatarPath;
     }

@@ -42,76 +42,36 @@ public class AIServiceImpl implements AIService {
     // 用于存储已生成摘要的会话ID
     private final Set<String> summarizedConversations = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
-    // 处理完成后，异步生成并更新对话摘要
-    private void handleCompleteEvent(String userId, String question, String answer,
-                                     String conversationId, WebSocketSession session) {
-        try {
-            String finalConversationId = (conversationId == null || conversationId.isEmpty())
-                    ? "conv_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12)
-                    : conversationId;
-
-            ChatRecord record = new ChatRecord();
-            record.setUserId(userId);
-            record.setQuestion(question);
-            record.setAnswer(answer);
-            record.setConversationId(finalConversationId);
-            record.setModel("deepseek-chat");
-
-            chatMapper.insertChat(record);
-
-            // 检查是否已经为该会话生成过摘要
-            if (!summarizedConversations.contains(finalConversationId)) {
-                // 异步调用摘要生成方法
-                String finalUserId = userId;
-                new Thread(() -> updateConversationSummary(finalConversationId, finalUserId)).start();
-            }
-
-            Map<String, Object> completeMsg = new HashMap<>();
-            completeMsg.put("type", "complete");
-            completeMsg.put("conversationId", finalConversationId);
-
-            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(completeMsg)));
-
-        } catch (Exception e) {
-            System.err.println("Error in handleCompleteEvent: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
-
-    /**
-     * 【更新】增加了详细的调试日志
-     * 调用AI模型生成并更新对话摘要
-     * @param conversationId 会话ID
-     * @param userId 用户ID
-     */
-    private void updateConversationSummary(String conversationId, String userId) {
-        // 检查是否已经生成过摘要
+    // 【FIX for Summary Delay】
+    // This method is now SYNCHRONOUS and returns the generated summary.
+    // It will be called directly before sending the 'complete' message.
+    private String generateAndSaveSummary(String conversationId, String userId) {
+        // Check if a summary has already been generated for this session to prevent duplicate work.
         if (summarizedConversations.contains(conversationId)) {
             System.out.println("[SUMMARY DEBUG] Summary already generated for conversation: " + conversationId + ". Skipping.");
-            return;
+            return null;
         }
 
-        // --- 调试日志 ---
         System.out.println("\n[SUMMARY DEBUG] ---------------------------------------------------");
         System.out.println("[SUMMARY DEBUG] Starting summary generation for conversationId: " + conversationId);
 
         try {
-            // 1. 确保会话记录在摘要表中存在
+            // Step 1: Ensure the conversation record exists in the summary table.
             chatMapper.touchConversation(conversationId, userId);
             System.out.println("[SUMMARY DEBUG] Step 1: Touched conversation in database.");
 
-            // 2. 获取最近的10条对话记录用于生成摘要
+            // Step 2: Get the last 10 chat records to generate the summary.
             List<ChatRecord> history = chatMapper.getRecentChatRecords(conversationId, 10);
             System.out.println("[SUMMARY DEBUG] Step 2: Fetched recent chat records. History size: " + history.size());
 
-            if (history.size() < 1) { // 对话太短，不生成摘要
+            if (history.isEmpty()) { // Do not generate a summary for a very short conversation.
                 System.out.println("[SUMMARY DEBUG] History too short. Aborting summary generation.");
                 System.out.println("[SUMMARY DEBUG] ---------------------------------------------------\n");
-                return;
+                return null;
             }
-            Collections.reverse(history); // 反转列表，确保按时间正序排列
+            Collections.reverse(history); // Reverse the list to be in chronological order.
 
-            // 3. 构建摘要提示
+            // Step 3: Construct the prompt for the summary.
             StringBuilder conversationText = new StringBuilder();
             for (ChatRecord record : history) {
                 conversationText.append("User: ").append(record.getQuestion()).append("\n");
@@ -121,7 +81,7 @@ public class AIServiceImpl implements AIService {
                     + conversationText;
             System.out.println("[SUMMARY DEBUG] Step 3: Built summary prompt.");
 
-            // 4. 调用AI API (非流式)
+            // Step 4: Call the AI API (non-streaming) to get the summary.
             List<StreamingRequest.Message> messages = new ArrayList<>();
             messages.add(new StreamingRequest.Message("system", "You are an expert at summarizing conversations into short titles. Respond in Chinese."));
             messages.add(new StreamingRequest.Message("user", summaryPrompt));
@@ -129,7 +89,7 @@ public class AIServiceImpl implements AIService {
             StreamingRequest request = new StreamingRequest();
             request.setModel("deepseek-chat");
             request.setMessages(messages);
-            request.setStream(false);
+            request.setStream(false); // Non-streaming for a single response
             request.setMaxTokens(60);
 
             String requestBody = objectMapper.writeValueAsString(request);
@@ -146,7 +106,7 @@ public class AIServiceImpl implements AIService {
                 os.write(requestBody.getBytes(StandardCharsets.UTF_8));
             }
 
-            // 5. 解析响应并获取摘要
+            // Step 5: Parse the response to get the summary content.
             StringBuilder response = new StringBuilder();
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
@@ -160,23 +120,67 @@ public class AIServiceImpl implements AIService {
             JsonNode choices = node.get("choices");
             if (choices != null && choices.isArray() && !choices.isEmpty()) {
                 String summary = choices.get(0).get("message").get("content").asText();
-                summary = summary.trim().replaceAll("^\"|\"$|^'|'$|^《|》$|^【|】$", ""); // 清理摘要内容
+                summary = summary.trim().replaceAll("^\"|\"$|^'|'$|^《|》$|^【|】$", ""); // Clean the summary content
                 System.out.println("[SUMMARY DEBUG] Step 6: Parsed summary: \"" + summary + "\"");
 
-                // 6. 更新数据库
+                // Step 6: Update the database with the new summary.
                 chatMapper.updateConversationSummary(conversationId, summary);
-                // 标记该会话已生成摘要
-                summarizedConversations.add(conversationId);
+                summarizedConversations.add(conversationId); // Mark as summarized
                 System.out.println("[SUMMARY DEBUG] Step 7: Successfully updated database with summary.");
+
+                // Step 7: Return the summary to be sent to the client.
+                return summary;
             } else {
                 System.err.println("[SUMMARY DEBUG] ERROR: 'choices' field is missing or empty in API response.");
             }
 
         } catch (Exception e) {
             System.err.println("[SUMMARY DEBUG] FATAL ERROR: An exception occurred during summary generation.");
-            e.printStackTrace(); // 打印完整的错误堆栈
+            e.printStackTrace();
         } finally {
             System.out.println("[SUMMARY DEBUG] ---------------------------------------------------\n");
+        }
+        return null; // Return null if summary generation fails.
+    }
+
+    // 【MODIFIED】This method now calls the summary generation synchronously.
+    private void handleCompleteEvent(String userId, String question, String answer,
+                                     String conversationId, WebSocketSession session) {
+        try {
+            // Determine the final conversation ID.
+            String finalConversationId = (conversationId == null || conversationId.isEmpty() || conversationId.startsWith("web_"))
+                    ? "conv_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12)
+                    : conversationId;
+
+            // Save the chat record to the database.
+            ChatRecord record = new ChatRecord();
+            record.setUserId(userId);
+            record.setQuestion(question);
+            record.setAnswer(answer);
+            record.setConversationId(finalConversationId);
+            record.setModel("deepseek-chat");
+            chatMapper.insertChat(record);
+
+            // **KEY CHANGE**: Generate summary synchronously and get the result.
+            // The async thread is removed to eliminate the race condition.
+            String summary = generateAndSaveSummary(finalConversationId, userId);
+
+            // Prepare the 'complete' message for the frontend.
+            Map<String, Object> completeMsg = new HashMap<>();
+            completeMsg.put("type", "complete");
+            completeMsg.put("conversationId", finalConversationId);
+
+            // **KEY CHANGE**: Include the summary in the message if it was generated.
+            if (summary != null) {
+                completeMsg.put("summary", summary);
+            }
+
+            // Send the final message via WebSocket.
+            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(completeMsg)));
+
+        } catch (Exception e) {
+            System.err.println("Error in handleCompleteEvent: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 

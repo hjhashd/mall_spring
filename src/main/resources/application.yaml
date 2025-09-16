@@ -4,7 +4,7 @@ server:
 # DeepSeek API配置
 ai:
   api:
-    key: sk-a6088edebf174bf6a80b727712d40b12
+    key: sk-4ae7ee2a7d3a454cbc81c89a9a584702
     url:  https://api.deepseek.com/v1/chat/completions
     model: deepseek-chat
     max_tokens: 4096

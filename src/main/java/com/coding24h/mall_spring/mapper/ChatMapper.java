@@ -44,13 +44,14 @@ public interface ChatMapper {
             "  t.conversation_id as conversationId, " +
             "  t.last_time as lastTime, " +
             "  ac.summary, " +
-            "  t.first_question as firstQuestion, " +
+            "  (SELECT question FROM ai_record " +
+            "   WHERE conversation_id = t.conversation_id " +
+            "   ORDER BY create_time ASC LIMIT 1) as firstQuestion, " +
             "  t.record_count as recordCount " +
             "FROM (" +
             "  SELECT " +
             "    conversation_id, " +
             "    MAX(create_time) as last_time, " +
-            "    SUBSTRING_INDEX(GROUP_CONCAT(question ORDER BY create_time ASC), ',', 1) as first_question, " +
             "    COUNT(*) as record_count " +
             "  FROM ai_record " +
             "  WHERE user_id = #{userId} " +
@@ -62,6 +63,7 @@ public interface ChatMapper {
     List<ConversationHistoryDTO> getConversationHistory(
             @Param("userId") String userId,
             @Param("limit") int limit);
+
 
     @Delete("DELETE FROM ai_record WHERE conversation_id = #{conversationId}")
     void deleteConversationRecords(@Param("conversationId") String conversationId);
